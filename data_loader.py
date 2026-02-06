@@ -286,13 +286,22 @@ def preprocess_data(df):
         else:
             df['검색순위'] = None
     
-    # 영문 alias 추가 (앱 호환성 - DuckDB에서 이미 생성했지만 확인)
-    if '검색일' in df.columns and 'search_date' not in df.columns:
-        df['search_date'] = df['검색일']
-    if '검색어' in df.columns and 'search_keyword' not in df.columns:
-        df['search_keyword'] = df['검색어']
-    if '검색량' in df.columns and 'total_count' not in df.columns:
-        df['total_count'] = df['검색량']
+    # 영문 alias 추가 (앱 호환성)
+    alias_mapping = {
+        '검색일': 'search_date',
+        '검색어': 'search_keyword',
+        '검색량': 'total_count',
+        '검색결과수': 'result_total_count',
+        '검색실패율': 'fail_rate',
+        '검색순위': 'rank',
+        '연령대': 'age',
+        '성별': 'gender',
+        '탭': 'tab'
+    }
+    
+    for korean, english in alias_mapping.items():
+        if korean in df.columns and english not in df.columns:
+            df[english] = df[korean]
     
     # logweek 생성 (없으면)
     if 'logweek' not in df.columns and 'search_date' in df.columns:
