@@ -9,127 +9,125 @@ from huggingface_hub import hf_hub_download
 # Data storage directory
 DATA_STORAGE_DIR = "data_storage"
 
-@st.cache_data(ttl=3600)
-def load_data_from_huggingface():
+def get_parquet_file_path():
     """
-    Hugging Face Hub에서 데이터 다운로드 및 로드
+    Hugging Face에서 Parquet 파일 경로만 가져오기 (다운로드만 수행)
     
     Returns:
-        pd.DataFrame: 로드된 데이터프레임
+        str: Parquet 파일 경로
     """
     import sys
+    
+    # Streamlit Secrets에서 설정 가져오기
+    if hasattr(st, 'secrets') and 'huggingface' in st.secrets:
+        repo_id = st.secrets['huggingface'].get('repo_id', 'kdragonkorea/search-data')
+        filename = st.secrets['huggingface'].get('filename', 'data_20261001_20261130.parquet')
+        token = st.secrets['huggingface'].get('token', None)
+    else:
+        # 기본값 사용
+        repo_id = 'kdragonkorea/search-data'
+        filename = 'data_20261001_20261130.parquet'
+        token = None
+    
+    print(f"Downloading from Hugging Face Hub...", flush=True)
+    sys.stdout.flush()
+    print(f"  Repository: {repo_id}", flush=True)
+    sys.stdout.flush()
+    print(f"  Filename: {filename}", flush=True)
+    sys.stdout.flush()
+    
+    # Hugging Face Hub에서 파일 다운로드 (캐시됨)
+    file_path = hf_hub_download(
+        repo_id=repo_id,
+        filename=filename,
+        repo_type="dataset",
+        token=token
+    )
+    
+    print(f"✓ Downloaded to: {file_path}", flush=True)
+    sys.stdout.flush()
+    
+    return file_path
+
+@st.cache_data(ttl=3600)
+def query_data_with_duckdb(start_date=None, end_date=None, max_rows=500000):
+    """
+    DuckDB로 Parquet 파일을 직접 쿼리 (메모리에 전체 로드하지 않음)
+    
+    Args:
+        start_date: 시작 날짜 (YYYYMMDD 형식)
+        end_date: 종료 날짜 (YYYYMMDD 형식)
+        max_rows: 최대 로드 행수 (메모리 보호)
+    
+    Returns:
+        pd.DataFrame: 쿼리 결과
+    """
+    import sys
+    
     try:
-        # Streamlit Secrets에서 설정 가져오기
-        if hasattr(st, 'secrets') and 'huggingface' in st.secrets:
-            repo_id = st.secrets['huggingface'].get('repo_id', 'kdragonkorea/search-data')
-            filename = st.secrets['huggingface'].get('filename', 'data_20261001_20261130.parquet')
-            token = st.secrets['huggingface'].get('token', None)
-        else:
-            # 기본값 사용
-            repo_id = 'kdragonkorea/search-data'
-            filename = 'data_20261001_20261130.parquet'
-            token = None
+        # Parquet 파일 경로 가져오기
+        file_path = get_parquet_file_path()
         
-        print(f"Loading dataset from Hugging Face Hub...", flush=True)
-        sys.stdout.flush()
-        print(f"  Repository: {repo_id}", flush=True)
-        sys.stdout.flush()
-        print(f"  Filename: {filename}", flush=True)
+        print(f"Querying data with DuckDB (memory-efficient)...", flush=True)
         sys.stdout.flush()
         
-        # Hugging Face Hub에서 파일 다운로드
-        print(f"Downloading from Hugging Face...", flush=True)
-        sys.stdout.flush()
-        file_path = hf_hub_download(
-            repo_id=repo_id,
-            filename=filename,
-            repo_type="dataset",
-            token=token
-        )
-        
-        print(f"✓ Downloaded to: {file_path}", flush=True)
-        sys.stdout.flush()
-        
-        # Parquet 파일 로드 - DuckDB로 최근 데이터만 로드 (메모리 절약)
-        print(f"Reading parquet file with DuckDB (filtering recent data)...", flush=True)
-        sys.stdout.flush()
-        
-        # DuckDB로 최근 30일치만 로드
-        import duckdb
+        # DuckDB 연결
         conn = duckdb.connect()
         
-        # 날짜 컬럼이 logday인지 확인하고 최근 데이터만 필터링
-        query = f"""
-        SELECT * FROM read_parquet('{file_path}')
-        WHERE logday >= (SELECT MAX(logday) - 30 FROM read_parquet('{file_path}'))
+        # 컬럼명 매핑을 SQL에서 직접 수행
+        base_query = f"""
+        SELECT 
+            logday as 검색일,
+            search_keyword as 검색어,
+            total_count as 검색량,
+            result_total_count as 검색결과수,
+            pathcd as 속성,
+            age as 연령대,
+            gender as 성별,
+            tab as 탭,
+            search_type as 검색타입,
+            uidx,
+            sessionid,
+            logweek,
+            pathcd
+        FROM read_parquet('{file_path}')
         """
         
-        try:
-            df = conn.execute(query).df()
-            print(f"✓ Successfully loaded {len(df):,} rows (recent 30 days), {len(df.columns)} columns", flush=True)
-        except Exception as e:
-            # Fallback: 날짜 필터링 실패 시 전체 로드 후 샘플링
-            print(f"Date filtering failed, loading with sampling...", flush=True)
-            df = pd.read_parquet(file_path)
-            # 최근 100만 행만 사용
-            if len(df) > 1000000:
-                df = df.tail(1000000)
-            print(f"✓ Successfully loaded {len(df):,} rows (sampled), {len(df.columns)} columns", flush=True)
-        finally:
-            conn.close()
+        # 날짜 필터링 조건 추가
+        if start_date and end_date:
+            where_clause = f"WHERE logday BETWEEN {start_date} AND {end_date}"
+        else:
+            # 기본: 최근 30일
+            where_clause = f"WHERE logday >= (SELECT MAX(logday) - 30 FROM read_parquet('{file_path}'))"
         
+        # 최종 쿼리
+        query = f"""
+        {base_query}
+        {where_clause}
+        LIMIT {max_rows}
+        """
+        
+        print(f"Executing query...", flush=True)
         sys.stdout.flush()
         
-        # 컬럼명 매핑 (원본 데이터 → 앱에서 사용하는 컬럼명)
-        column_mapping = {
-            'logday': '검색일',
-            'search_keyword': '검색어',
-            'total_count': '검색량',
-            'result_total_count': '검색결과수',
-            'pathcd': '속성',
-            'age': '연령대',
-            'gender': '성별',
-            'tab': '탭',
-            'search_type': '검색타입'
-        }
+        # 쿼리 실행
+        df = conn.execute(query).df()
+        conn.close()
         
-        # 컬럼명 변경
-        print(f"Applying column mapping...", flush=True)
-        sys.stdout.flush()
-        df = df.rename(columns=column_mapping)
-        print(f"✓ Column mapping applied", flush=True)
+        print(f"✓ Query completed: {len(df):,} rows, {len(df.columns)} columns", flush=True)
         sys.stdout.flush()
         
-        # 필요한 컬럼 선택 (매핑된 컬럼 + 추가 필요 컬럼)
-        required_columns = list(column_mapping.values())
-        additional_columns = ['uidx', 'sessionid', 'logweek', 'pathcd']  # 파이차트용 추가 컬럼
-        
-        # 존재하는 컬럼만 선택
-        available_columns = [col for col in required_columns + additional_columns if col in df.columns]
-        # 중복 제거
-        available_columns = list(dict.fromkeys(available_columns))
-        
-        if available_columns:
-            df = df[available_columns]
-            print(f"✓ Selected {len(available_columns)} columns", flush=True)
-            sys.stdout.flush()
-        
-        print(f"✓ load_data_from_huggingface() completed successfully", flush=True)
-        sys.stdout.flush()
         return df
         
     except Exception as e:
-        import sys
         import traceback
-        error_msg = f"✗ Error loading from Hugging Face: {e}"
+        error_msg = f"✗ Error querying data: {e}"
         print(error_msg, flush=True)
         sys.stdout.flush()
         traceback.print_exc()
         sys.stdout.flush()
-        # Streamlit에 에러 표시
-        st.error(f"데이터 로드 실패: {str(e)}")
-        st.error("Hugging Face 데이터셋 접근 권한을 확인해주세요.")
-        raise e  # 에러를 다시 발생시켜 Streamlit Cloud 로그에 표시
+        st.error(f"데이터 쿼리 실패: {str(e)}")
+        raise e
 
 def sync_data_storage():
     """
@@ -142,21 +140,25 @@ def sync_data_storage():
     # 아무 작업도 하지 않음 - load_data()에서 직접 HF에서 로드
 
 @st.cache_data(ttl=3600)
-def load_data():
+def load_data(start_date=None, end_date=None):
     """
-    데이터 로드 (캐싱 적용)
+    데이터 로드 (DuckDB 쿼리 기반, 메모리 효율적)
     
-    Streamlit Cloud 최적화: Hugging Face에서 직접 로드 (로컬 캐싱 건너뛰기)
+    Args:
+        start_date: 시작 날짜 (YYYYMMDD 형식)
+        end_date: 종료 날짜 (YYYYMMDD 형식)
     
     Returns:
-        pd.DataFrame: 로드된 데이터프레임
+        pd.DataFrame: 쿼리된 데이터프레임
     """
     import sys
-    # Streamlit Cloud에서는 로컬 캐싱 건너뛰기 (메모리 절약)
-    print("Loading from Hugging Face Hub (no local caching)...", flush=True)
+    print("Loading data with DuckDB (memory-efficient)...", flush=True)
     sys.stdout.flush()
-    df = load_data_from_huggingface()  # 에러 발생 시 여기서 raise됨
-    print(f"✓ Data loaded successfully", flush=True)
+    
+    # DuckDB로 필요한 데이터만 쿼리
+    df = query_data_with_duckdb(start_date, end_date)
+    
+    print(f"✓ Data loaded successfully: {len(df):,} rows", flush=True)
     sys.stdout.flush()
     
     # 데이터 타입 변환 (중요: 숫자형을 문자열로 변환 후 날짜 파싱)
@@ -226,92 +228,72 @@ def preprocess_data(df):
     if df is None or len(df) == 0:
         return df
     
-    # 데이터 타입 변환
-    if '검색일' in df.columns:
-        # 숫자형이면 문자열로 변환 후 날짜 파싱
-        if df['검색일'].dtype in ['int64', 'float64']:
-            df['검색일'] = df['검색일'].astype(str).str.replace('.0', '', regex=False)
-        df['검색일'] = pd.to_datetime(df['검색일'], format='%Y%m%d', errors='coerce')
+    import sys
+    print(f"Preprocessing {len(df):,} rows...", flush=True)
+    sys.stdout.flush()
     
-    # 숫자형 컬럼 변환
-    numeric_columns = ['검색순위', '검색량', '검색실패율', '검색결과수']
-    for col in numeric_columns:
-        if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors='coerce')
+    # 날짜 컬럼 타입 변환 (YYYYMMDD → datetime)
+    if '검색일' in df.columns and df['검색일'].dtype in ['int64', 'float64', 'Int64']:
+        df['검색일'] = pd.to_datetime(df['검색일'].astype(str), format='%Y%m%d', errors='coerce')
     
-    # 검색실패율 계산 (검색결과수가 0이면 실패)
+    # 검색실패율 계산 (없으면 생성)
     if '검색결과수' in df.columns and '검색실패율' not in df.columns:
         df['검색실패율'] = (df['검색결과수'] == 0).astype(float) * 100.0
     
-    # 검색순위 생성 (날짜별, 검색량 기준) - 필터링된 데이터에만 적용
+    # 검색순위 생성 (50만 행 이하일 때만 계산 - 메모리 절약)
     if '검색순위' not in df.columns or df['검색순위'].isna().all():
-        if '검색량' in df.columns and '검색일' in df.columns and len(df) < 1000000:
-            # 100만 행 이하일 때만 계산 (필터링 후)
+        if '검색량' in df.columns and '검색일' in df.columns and len(df) < 500000:
+            print(f"Calculating rankings...", flush=True)
+            sys.stdout.flush()
             df['검색순위'] = df.groupby('검색일')['검색량'].rank(ascending=False, method='dense')
         else:
             df['검색순위'] = None
     
-    # 결측값 처리 (컬럼이 존재하는 경우만)
-    if '검색어' in df.columns:
-        df = df.dropna(subset=['검색어'])
+    # 영문 alias 추가 (앱 호환성 - DuckDB에서 이미 생성했지만 확인)
+    if '검색일' in df.columns and 'search_date' not in df.columns:
+        df['search_date'] = df['검색일']
+    if '검색어' in df.columns and 'search_keyword' not in df.columns:
+        df['search_keyword'] = df['검색어']
+    if '검색량' in df.columns and 'total_count' not in df.columns:
+        df['total_count'] = df['검색량']
     
-    # 앱 호환성을 위한 영문 컬럼명 추가 (기존 한글 컬럼 유지)
-    
-    column_aliases = {
-        '검색일': 'search_date',
-        '검색어': 'search_keyword',
-        '검색량': 'total_count',
-        '검색결과수': 'result_total_count',
-        '검색실패율': 'fail_rate',
-        '검색순위': 'rank',
-        '속성': 'pathcd',
-        '연령대': 'age',
-        '성별': 'gender',
-        '탭': 'tab',
-        '검색타입': 'search_type'
-    }
-    
-    for korean, english in column_aliases.items():
-        if korean in df.columns and english not in df.columns:
-            df[english] = df[korean]
-    
-    # sessionid 컬럼이 없으면 생성 (집계용)
-    if 'sessionid' not in df.columns:
-        df['sessionid'] = range(len(df))
-    
-    # logweek 컬럼이 없으면 생성 (주차 정보)
+    # logweek 생성 (없으면)
     if 'logweek' not in df.columns and 'search_date' in df.columns:
         df['logweek'] = df['search_date'].dt.isocalendar().week
     
-    print(f"✓ Preprocessing complete: {len(df):,} rows")
+    # sessionid 생성 (없으면)
+    if 'sessionid' not in df.columns:
+        df['sessionid'] = range(len(df))
+    
+    print(f"✓ Preprocessing complete: {len(df):,} rows", flush=True)
+    sys.stdout.flush()
     
     return df
 
 def load_data_range(start_date=None, end_date=None):
     """
-    날짜 범위로 데이터 필터링
+    날짜 범위로 데이터 로드 (DuckDB 쿼리 기반)
     
     Args:
-        start_date: 시작 날짜 (None이면 전체)
-        end_date: 종료 날짜 (None이면 전체)
+        start_date: 시작 날짜 (datetime.date 또는 None)
+        end_date: 종료 날짜 (datetime.date 또는 None)
     
     Returns:
         pd.DataFrame: 필터링된 데이터프레임
     """
-    df = load_data()
-    
-    if start_date is None and end_date is None:
-        return df
-    
-    if '검색일' not in df.columns:
-        return df
-    
-    # 날짜 필터링
+    # 날짜를 YYYYMMDD 형식으로 변환
     if start_date is not None:
-        df = df[df['검색일'] >= pd.to_datetime(start_date)]
+        start_date_str = start_date.strftime('%Y%m%d') if hasattr(start_date, 'strftime') else str(start_date).replace('-', '')
+    else:
+        start_date_str = None
     
     if end_date is not None:
-        df = df[df['검색일'] <= pd.to_datetime(end_date)]
+        end_date_str = end_date.strftime('%Y%m%d') if hasattr(end_date, 'strftime') else str(end_date).replace('-', '')
+    else:
+        end_date_str = None
+    
+    # DuckDB로 필터링된 데이터 로드
+    df = load_data(start_date_str, end_date_str)
     
     return df
 
