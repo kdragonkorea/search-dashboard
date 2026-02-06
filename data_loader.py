@@ -50,11 +50,34 @@ def load_data_from_huggingface():
         print(f"✓ Downloaded to: {file_path}", flush=True)
         sys.stdout.flush()
         
-        # Parquet 파일 로드
-        print(f"Reading parquet file...", flush=True)
+        # Parquet 파일 로드 - DuckDB로 최근 데이터만 로드 (메모리 절약)
+        print(f"Reading parquet file with DuckDB (filtering recent data)...", flush=True)
         sys.stdout.flush()
-        df = pd.read_parquet(file_path)
-        print(f"✓ Successfully loaded {len(df):,} rows, {len(df.columns)} columns", flush=True)
+        
+        # DuckDB로 최근 30일치만 로드
+        import duckdb
+        conn = duckdb.connect()
+        
+        # 날짜 컬럼이 logday인지 확인하고 최근 데이터만 필터링
+        query = f"""
+        SELECT * FROM read_parquet('{file_path}')
+        WHERE logday >= (SELECT MAX(logday) - 30 FROM read_parquet('{file_path}'))
+        """
+        
+        try:
+            df = conn.execute(query).df()
+            print(f"✓ Successfully loaded {len(df):,} rows (recent 30 days), {len(df.columns)} columns", flush=True)
+        except Exception as e:
+            # Fallback: 날짜 필터링 실패 시 전체 로드 후 샘플링
+            print(f"Date filtering failed, loading with sampling...", flush=True)
+            df = pd.read_parquet(file_path)
+            # 최근 100만 행만 사용
+            if len(df) > 1000000:
+                df = df.tail(1000000)
+            print(f"✓ Successfully loaded {len(df):,} rows (sampled), {len(df.columns)} columns", flush=True)
+        finally:
+            conn.close()
+        
         sys.stdout.flush()
         
         # 컬럼명 매핑 (원본 데이터 → 앱에서 사용하는 컬럼명)
