@@ -80,10 +80,14 @@ def load_data_from_huggingface():
         return df
         
     except Exception as e:
-        print(f"✗ Error loading from Hugging Face: {e}")
+        error_msg = f"✗ Error loading from Hugging Face: {e}"
+        print(error_msg)
         import traceback
         traceback.print_exc()
-        return None
+        # Streamlit에 에러 표시
+        st.error(f"데이터 로드 실패: {str(e)}")
+        st.error("Hugging Face 데이터셋 접근 권한을 확인해주세요.")
+        raise e  # 에러를 다시 발생시켜 Streamlit Cloud 로그에 표시
 
 def sync_data_storage():
     """
@@ -150,11 +154,7 @@ def load_data():
     else:
         # Hugging Face에서 직접 로드
         print("No local files found. Loading from Hugging Face Hub...")
-        df = load_data_from_huggingface()
-        
-        if df is None:
-            st.error("데이터를 불러올 수 없습니다. Hugging Face 설정을 확인해주세요.")
-            st.stop()
+        df = load_data_from_huggingface()  # 에러 발생 시 여기서 raise됨
         
         # 로컬에 캐싱 (다음 실행 시 빠르게 로드)
         try:
