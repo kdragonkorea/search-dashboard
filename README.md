@@ -30,19 +30,20 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
-### Google Drive 데이터 연동 (선택사항)
+### Hugging Face Datasets 연동 (선택사항)
 
-대용량 데이터 파일은 Google Drive에서 자동으로 다운로드됩니다.
+대용량 데이터는 Hugging Face Datasets에서 자동으로 로드됩니다.
 
 1. `.streamlit/secrets.toml` 파일 생성:
 
 ```toml
-[gdrive."data_20261001_20261130.parquet"]
-file_id = "YOUR_FILE_ID"
+[huggingface]
+dataset_name = "your-username/search-trends-data"
+split = "train"
 enabled = true
 ```
 
-2. 앱 실행 시 자동으로 데이터 다운로드
+2. 앱 실행 시 자동으로 데이터 다운로드 및 캐싱
 
 ---
 
@@ -99,7 +100,7 @@ search-dashboard/
 - **Frontend**: Streamlit
 - **Data Processing**: Pandas, DuckDB
 - **Visualization**: Plotly
-- **Storage**: Google Drive (대용량 파일)
+- **Storage**: Hugging Face Datasets (대용량 파일)
 
 ---
 

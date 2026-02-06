@@ -10,6 +10,7 @@ Search Trends Dashboard를 웹에 배포하는 방법을 안내합니다.
 - **비용**: 완전 무료
 - **난이도**: ⭐☆☆☆☆
 - **Uptime**: 24/7
+- **데이터 연동**: Hugging Face Datasets 자동 연동
 - **가이드**: [huggingface/README.md](huggingface/README.md)
 
 ### 2️⃣ Railway
@@ -32,26 +33,57 @@ Search Trends Dashboard를 웹에 배포하는 방법을 안내합니다.
 
 ---
 
-## 📦 Google Drive 데이터 연동
+## 📦 Hugging Face Datasets 연동
 
-대용량 데이터 파일(164MB)은 Google Drive에서 자동으로 다운로드됩니다.
+대용량 데이터는 Hugging Face Datasets에서 자동으로 로드됩니다.
 
-**설정 방법:**
+### 데이터셋 준비
 
-### 1. Google Drive 파일 준비
-1. 파일을 Google Drive에 업로드
-2. 공유 설정: "링크가 있는 모든 사용자"
-3. 파일 ID 추출: `https://drive.google.com/file/d/[FILE_ID]/view?usp=sharing`
+1. **Hugging Face 계정 생성**
+   - https://huggingface.co 에서 무료 계정 생성
 
-### 2. Secrets 설정
+2. **데이터셋 업로드**
+   ```bash
+   # Hugging Face CLI 설치
+   pip install huggingface-hub
+   
+   # 로그인
+   huggingface-cli login
+   
+   # 데이터셋 생성 및 업로드
+   # 웹 UI: https://huggingface.co/new-dataset
+   # 또는 Python으로:
+   from datasets import Dataset
+   import pandas as pd
+   
+   df = pd.read_parquet("your_data.parquet")
+   dataset = Dataset.from_pandas(df)
+   dataset.push_to_hub("your-username/search-trends-data")
+   ```
+
+3. **데이터셋 공개 설정**
+   - Public: 누구나 접근 가능 (추천)
+   - Private: 토큰 필요
+
+### Secrets 설정
 
 각 플랫폼의 Secrets 설정에 다음 내용 추가:
 
 ```toml
-[gdrive."data_20261001_20261130.parquet"]
-file_id = "YOUR_FILE_ID"
+[huggingface]
+dataset_name = "your-username/search-trends-data"
+split = "train"
 enabled = true
+
+# Private 데이터셋인 경우:
+# token = "hf_xxxxxxxxxxxxxxxxxxxxx"
 ```
+
+**토큰 발급 방법:**
+1. https://huggingface.co/settings/tokens 접속
+2. "New token" 클릭
+3. "Read" 권한 선택
+4. 생성된 토큰 복사
 
 ---
 
@@ -71,7 +103,23 @@ enabled = true
 **공통 문제:**
 1. Secrets 미설정 → 각 플랫폼 Secrets 설정 확인
 2. 패키지 설치 실패 → requirements.txt 확인
-3. 데이터 다운로드 실패 → Google Drive 공유 설정 확인
+3. 데이터 로딩 실패 → Hugging Face 데이터셋 공개 설정 확인
+4. Private 데이터셋 접근 실패 → Hugging Face 토큰 확인
+
+**Hugging Face Datasets 관련:**
+- 데이터셋이 Public인지 확인
+- 데이터셋 이름이 정확한지 확인 (username/dataset-name)
+- Private 데이터셋은 토큰 필요
+
+---
+
+## 🎯 빠른 시작 (Hugging Face Spaces)
+
+1. 데이터셋 업로드: https://huggingface.co/new-dataset
+2. Space 생성: https://huggingface.co/new-space
+3. GitHub 레포지토리 연결
+4. Secrets 설정 (dataset_name)
+5. 자동 배포 완료!
 
 ---
 
