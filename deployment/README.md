@@ -71,13 +71,14 @@ Search Trends Dashboard를 웹에 배포하는 방법을 안내합니다.
 
 ```toml
 [huggingface]
-dataset_name = "your-username/search-trends-data"
-split = "train"
-enabled = true
+repo_id = "your-username/search-data"
+filename = "data_20261001_20261130.parquet"
 
 # Private 데이터셋인 경우:
-# token = "hf_xxxxxxxxxxxxxxxxxxxxx"
+token = "hf_xxxxxxxxxxxxxxxxxxxxx"
 ```
+
+**Public 데이터셋인 경우 token 생략 가능**
 
 **토큰 발급 방법:**
 1. https://huggingface.co/settings/tokens 접속

@@ -33,9 +33,17 @@
 3. 다음 내용 입력:
 
 ```toml
-[gdrive."data_20261001_20261130.parquet"]
-file_id = "1Ly6-c0JYpiWGTx56-QHQdzAEZI6axf-i"
-enabled = true
+[huggingface]
+repo_id = "kdragonkorea/search-data"
+filename = "data_20261001_20261130.parquet"
+token = "hf_xxxxxxxxxxxxxxxxxxxxx"
+```
+
+**Public 데이터셋인 경우 token 생략 가능:**
+```toml
+[huggingface]
+repo_id = "kdragonkorea/search-data"
+filename = "data_20261001_20261130.parquet"
 ```
 
 4. "Save" 클릭
@@ -57,8 +65,9 @@ enabled = true
 - 앱 재시작 후에도 오류 발생 시 Secrets 재입력
 
 ### 데이터 로딩 실패
-- Google Drive 파일 공유 설정 확인
-- File ID가 정확한지 확인
+- Hugging Face 데이터셋이 존재하는지 확인
+- repo_id와 filename이 정확한지 확인
+- Private 데이터셋인 경우 token 확인
 
 ---
 
