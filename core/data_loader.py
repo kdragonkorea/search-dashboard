@@ -158,15 +158,26 @@ def load_data():
         except Exception as e:
             print(f"Warning: Could not cache data locally: {e}")
     
-    # 데이터 타입 변환
+    # 데이터 타입 변환 (중요: 숫자형을 문자열로 변환 후 날짜 파싱)
     if '검색일' in df.columns:
-        df['검색일'] = pd.to_datetime(df['검색일'])
+        # 숫자형이면 문자열로 변환
+        if df['검색일'].dtype in ['int64', 'float64', 'Int64']:
+            df['검색일'] = df['검색일'].astype(str).str.replace('.0', '', regex=False)
+        df['검색일'] = pd.to_datetime(df['검색일'], format='%Y%m%d', errors='coerce')
     
     # 숫자형 컬럼 변환
-    numeric_columns = ['검색순위', '검색량', '검색실패율']
+    numeric_columns = ['검색순위', '검색량', '검색실패율', '검색결과수']
     for col in numeric_columns:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors='coerce')
+    
+    # 검색실패율 계산 (없으면 생성)
+    if '검색결과수' in df.columns and '검색실패율' not in df.columns:
+        df['검색실패율'] = (df['검색결과수'] == 0).astype(float) * 100.0
+    
+    # 검색순위 생성 (없으면 생성)
+    if '검색순위' not in df.columns and '검색량' in df.columns and '검색일' in df.columns:
+        df['검색순위'] = df.groupby('검색일')['검색량'].rank(ascending=False, method='dense')
     
     print(f"✓ Data ready: {len(df):,} rows, {len(df.columns)} columns")
     
@@ -187,6 +198,9 @@ def preprocess_data(df):
     
     # 데이터 타입 변환
     if '검색일' in df.columns:
+        # 숫자형이면 문자열로 변환 후 날짜 파싱
+        if df['검색일'].dtype in ['int64', 'float64']:
+            df['검색일'] = df['검색일'].astype(str).str.replace('.0', '', regex=False)
         df['검색일'] = pd.to_datetime(df['검색일'], format='%Y%m%d', errors='coerce')
     
     # 숫자형 컬럼 변환
