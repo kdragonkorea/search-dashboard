@@ -179,16 +179,19 @@ def load_data():
     
     if parquet_files:
         # 로컬 파일 사용
-        print(f"Loading data from {len(parquet_files)} local parquet file(s)...")
+        print(f"Loading data from {len(parquet_files)} local parquet file(s)...", flush=True)
+        import sys
+        sys.stdout.flush()
         
-        # DuckDB로 빠르게 로드
+        # DuckDB로 빠르게 로드 - 메모리 절약을 위해 전체 로드
         conn = duckdb.connect()
         parquet_pattern = f"{DATA_STORAGE_DIR}/*.parquet"
         query = f"SELECT * FROM read_parquet('{parquet_pattern}')"
         df = conn.execute(query).df()
         conn.close()
         
-        print(f"✓ Loaded {len(df):,} rows from local storage")
+        print(f"✓ Loaded {len(df):,} rows from local storage", flush=True)
+        sys.stdout.flush()
     else:
         # Hugging Face에서 직접 로드
         print("No local files found. Loading from Hugging Face Hub...")
@@ -220,13 +223,13 @@ def load_data():
     if '검색결과수' in df.columns and '검색실패율' not in df.columns:
         df['검색실패율'] = (df['검색결과수'] == 0).astype(float) * 100.0
     
-    # 검색순위 생성 (없으면 생성)
-    if '검색순위' not in df.columns and '검색량' in df.columns and '검색일' in df.columns:
-        df['검색순위'] = df.groupby('검색일')['검색량'].rank(ascending=False, method='dense')
+    # 검색순위 생성 (없으면 생성) - 초기 로드 시 건너뛰기 (메모리 절약)
+    # 필요할 때 필터링된 데이터에 대해서만 계산
+    if '검색순위' not in df.columns:
+        df['검색순위'] = None  # 나중에 계산
     
     # 앱 호환성을 위한 영문 컬럼명 추가 (기존 한글 컬럼 유지)
-    df = df.copy()
-    
+    # 메모리 절약: 필요한 alias만 추가
     column_aliases = {
         '검색일': 'search_date',
         '검색어': 'search_keyword',
@@ -287,17 +290,19 @@ def preprocess_data(df):
     if '검색결과수' in df.columns and '검색실패율' not in df.columns:
         df['검색실패율'] = (df['검색결과수'] == 0).astype(float) * 100.0
     
-    # 검색순위 생성 (날짜별, 검색량 기준)
-    if '검색순위' not in df.columns and '검색량' in df.columns and '검색일' in df.columns:
-        df['검색순위'] = df.groupby('검색일')['검색량'].rank(ascending=False, method='dense')
+    # 검색순위 생성 (날짜별, 검색량 기준) - 필터링된 데이터에만 적용
+    if '검색순위' not in df.columns or df['검색순위'].isna().all():
+        if '검색량' in df.columns and '검색일' in df.columns and len(df) < 1000000:
+            # 100만 행 이하일 때만 계산 (필터링 후)
+            df['검색순위'] = df.groupby('검색일')['검색량'].rank(ascending=False, method='dense')
+        else:
+            df['검색순위'] = None
     
     # 결측값 처리 (컬럼이 존재하는 경우만)
     if '검색어' in df.columns:
         df = df.dropna(subset=['검색어'])
     
     # 앱 호환성을 위한 영문 컬럼명 추가 (기존 한글 컬럼 유지)
-    # SettingWithCopyWarning 방지를 위해 copy() 사용
-    df = df.copy()
     
     column_aliases = {
         '검색일': 'search_date',
