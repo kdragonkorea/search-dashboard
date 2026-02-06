@@ -107,22 +107,24 @@ def sync_data_storage():
     print(f"No parquet files found in {DATA_STORAGE_DIR}/")
     print("Attempting to download from Hugging Face...")
     
-    # Hugging Face에서 데이터 로드
-    df = load_data_from_huggingface()
-    
-    if df is not None:
+    try:
+        # Hugging Face에서 데이터 로드
+        df = load_data_from_huggingface()
+        
         # 로컬에 캐싱
         output_file = f"{DATA_STORAGE_DIR}/data_huggingface.parquet"
         df.to_parquet(output_file, index=False)
         print(f"✓ Cached to {output_file}")
         print(f"  Size: {os.path.getsize(output_file) / (1024*1024):.1f}MB")
-    else:
-        print("\n⚠ Failed to load data from Hugging Face")
+    except Exception as e:
+        print(f"\n⚠ Failed to load data from Hugging Face: {e}")
         print("  Please check:")
         print("  1. Repository ID is correct")
         print("  2. Filename is correct")
         print("  3. Token is valid (for private datasets)")
         print("  4. Dataset exists and is accessible")
+        # 에러를 다시 발생시켜서 앱이 명확하게 실패하도록
+        raise
 
 @st.cache_data(ttl=3600)
 def load_data():

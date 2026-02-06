@@ -266,7 +266,12 @@ def load_custom_css():
 load_custom_css()
 
 # [중요] 동기화는 캐시 외부에서 매번 실행하여 새 파일을 즉시 감지하도록 합니다.
-data_loader.sync_data_storage()
+try:
+    data_loader.sync_data_storage()
+except Exception as e:
+    st.error(f"데이터 초기화 실패: {str(e)}")
+    st.error("Hugging Face 데이터셋 설정을 확인해주세요.")
+    st.stop()
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_initial_df():
