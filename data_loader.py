@@ -82,14 +82,14 @@ def query_data_with_duckdb(start_date=None, end_date=None, use_aggregation=False
             where_clause = ""
         
         if use_aggregation:
-            # 집계 쿼리 (메모리 절약)
+            # 집계 쿼리 (메모리 절약) - 일별/키워드별/속성별 집계
             query = f"""
             SELECT 
                 logday as 검색일,
                 search_keyword as 검색어,
                 SUM(total_count) as 검색량,
                 SUM(result_total_count) as 검색결과수,
-                pathcd as 속성,
+                pathcd,
                 age as 연령대,
                 gender as 성별,
                 tab as 탭,
@@ -99,7 +99,7 @@ def query_data_with_duckdb(start_date=None, end_date=None, use_aggregation=False
                 logweek
             FROM read_parquet('{file_path}')
             {where_clause}
-            GROUP BY 검색일, 검색어, 속성, 연령대, 성별, 탭, 검색타입, logweek
+            GROUP BY logday, search_keyword, pathcd, age, gender, tab, search_type, logweek
             """
         else:
             # 원본 데이터 쿼리
@@ -155,34 +155,35 @@ def sync_data_storage():
     # 아무 작업도 하지 않음 - load_data()에서 직접 HF에서 로드
 
 @st.cache_data(ttl=3600)
-def load_data(start_date=None, end_date=None, use_aggregation=False):
+def load_data(start_date=None, end_date=None, use_aggregation=True):
     """
     데이터 로드 (DuckDB 쿼리 기반, 메모리 효율적)
     
     Args:
         start_date: 시작 날짜 (YYYYMMDD 형식)
         end_date: 종료 날짜 (YYYYMMDD 형식)
-        use_aggregation: True면 집계된 데이터, False면 원본 데이터
+        use_aggregation: 항상 True (메모리 안전을 위해 항상 집계 사용)
     
     Returns:
-        pd.DataFrame: 쿼리된 데이터프레임
+        pd.DataFrame: 쿼리된 데이터프레임 (집계됨)
     """
     import sys
     
-    # 날짜 필터가 없으면 집계 사용 (전체 데이터는 너무 큼)
+    # 항상 집계 사용 (메모리 안전)
     if start_date is None and end_date is None:
         print("Loading aggregated data (full dataset)...", flush=True)
-        use_aggregation = True
     else:
-        print("Loading filtered data with DuckDB...", flush=True)
+        print(f"Loading aggregated data (filtered: {start_date} ~ {end_date})...", flush=True)
     
     sys.stdout.flush()
     
-    # DuckDB로 필요한 데이터만 쿼리
-    df = query_data_with_duckdb(start_date, end_date, use_aggregation)
+    # DuckDB로 집계된 데이터만 쿼리
+    df = query_data_with_duckdb(start_date, end_date, use_aggregation=True)
     
     print(f"✓ Data loaded successfully: {len(df):,} rows", flush=True)
     sys.stdout.flush()
+    
+    return df
     
     # 데이터 타입 변환 (중요: 숫자형을 문자열로 변환 후 날짜 파싱)
     if '검색일' in df.columns:
