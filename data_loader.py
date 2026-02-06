@@ -33,28 +33,65 @@ def download_file_from_gdrive(file_id, output_path, file_name="data file"):
     try:
         print(f"Downloading {file_name} from Google Drive (ID: {file_id[:10]}...)...")
         
-        # Google Drive 직접 다운로드 URL
-        url = f"https://drive.google.com/uc?export=download&id={file_id}"
-        
         # 대용량 파일 처리를 위한 세션 사용
         session = requests.Session()
-        response = session.get(url, stream=True)
         
-        # 바이러스 스캔 경고가 있는 대용량 파일 처리
-        token = None
-        for key, value in response.cookies.items():
-            if key.startswith('download_warning'):
-                token = value
-                break
+        # Method 1: Try usercontent.google.com (direct download, bypasses virus scan)
+        print("Attempting direct download via usercontent.google.com...")
+        usercontent_url = f"https://drive.usercontent.google.com/download?id={file_id}&export=download&confirm=t"
         
-        if token:
-            params = {'id': file_id, 'confirm': token}
-            response = session.get(url, params=params, stream=True)
+        response = session.get(usercontent_url, stream=True, allow_redirects=True)
+        
+        # Check if we got a valid file response
+        content_type = response.headers.get('content-type', '')
+        
+        # If usercontent method failed, try traditional method
+        if 'text/html' in content_type or response.status_code != 200:
+            print("Direct download failed, trying traditional method...")
+            
+            # Method 2: Traditional drive.google.com with confirm token
+            base_url = "https://drive.google.com/uc?export=download"
+            response = session.get(base_url, params={'id': file_id}, stream=True)
+            
+            # Extract confirm token from HTML
+            token = None
+            for key, value in response.cookies.items():
+                if key.startswith('download_warning'):
+                    token = value
+                    break
+            
+            if not token:
+                content = response.content.decode('utf-8', errors='ignore')
+                if 'confirm=' in content:
+                    import re
+                    match = re.search(r'name="confirm"\s+value="([^"]+)"', content)
+                    if match:
+                        token = match.group(1)
+                        print(f"Found confirm token: {token[:10]}...")
+            
+            if token:
+                print("Bypassing virus scan warning with confirm token...")
+                params = {'id': file_id, 'confirm': token, 'export': 'download'}
+                response = session.get(base_url, params=params, stream=True)
+            
+            # Final check
+            content_type = response.headers.get('content-type', '')
+            if 'text/html' in content_type:
+                print(f"✗ Failed: Still receiving HTML. Check these:")
+                print(f"   1. File must be shared as 'Anyone with the link'")
+                print(f"   2. Link should end with '?usp=sharing' not '?usp=drive_link'")
+                print(f"   3. File ID might be incorrect: {file_id}")
+                return False
         
         # 파일 저장
         total_size = int(response.headers.get('content-length', 0))
         block_size = 8192
         downloaded = 0
+        
+        if total_size > 0:
+            print(f"Starting download... (Expected size: {total_size / (1024*1024):.1f}MB)")
+        else:
+            print(f"Starting download... (size unknown)")
         
         with open(output_path, 'wb') as f:
             for chunk in response.iter_content(chunk_size=block_size):
@@ -67,13 +104,27 @@ def download_file_from_gdrive(file_id, output_path, file_name="data file"):
                         progress = (downloaded / total_size) * 100
                         if downloaded % (block_size * 1000) == 0:  # 매 8MB마다 로그
                             print(f"Progress: {progress:.1f}% ({downloaded / (1024*1024):.1f}MB / {total_size / (1024*1024):.1f}MB)")
+                    else:
+                        # 크기를 모를 때는 다운로드된 크기만 표시
+                        if downloaded % (block_size * 1000) == 0:
+                            print(f"Downloaded: {downloaded / (1024*1024):.1f}MB")
         
         file_size = os.path.getsize(output_path) / (1024 * 1024)  # MB
+        
+        # 파일 크기 검증 (너무 작으면 실패로 간주)
+        if file_size < 0.1:  # 100KB 미만
+            print(f"✗ Download failed: File too small ({file_size:.2f}MB)")
+            if os.path.exists(output_path):
+                os.remove(output_path)
+            return False
+        
         print(f"✓ Download complete: {file_name} ({file_size:.1f}MB)")
         return True
         
     except Exception as e:
         print(f"✗ Failed to download {file_name}: {str(e)}")
+        import traceback
+        traceback.print_exc()
         # 실패 시 부분 다운로드 파일 삭제
         if os.path.exists(output_path):
             os.remove(output_path)
