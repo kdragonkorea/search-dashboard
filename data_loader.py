@@ -17,6 +17,7 @@ def load_data_from_huggingface():
     Returns:
         pd.DataFrame: 로드된 데이터프레임
     """
+    import sys
     try:
         # Streamlit Secrets에서 설정 가져오기
         if hasattr(st, 'secrets') and 'huggingface' in st.secrets:
@@ -29,11 +30,16 @@ def load_data_from_huggingface():
             filename = 'data_20261001_20261130.parquet'
             token = None
         
-        print(f"Loading dataset from Hugging Face Hub...")
-        print(f"  Repository: {repo_id}")
-        print(f"  Filename: {filename}")
+        print(f"Loading dataset from Hugging Face Hub...", flush=True)
+        sys.stdout.flush()
+        print(f"  Repository: {repo_id}", flush=True)
+        sys.stdout.flush()
+        print(f"  Filename: {filename}", flush=True)
+        sys.stdout.flush()
         
         # Hugging Face Hub에서 파일 다운로드
+        print(f"Downloading from Hugging Face...", flush=True)
+        sys.stdout.flush()
         file_path = hf_hub_download(
             repo_id=repo_id,
             filename=filename,
@@ -41,11 +47,15 @@ def load_data_from_huggingface():
             token=token
         )
         
-        print(f"✓ Downloaded to: {file_path}")
+        print(f"✓ Downloaded to: {file_path}", flush=True)
+        sys.stdout.flush()
         
         # Parquet 파일 로드
+        print(f"Reading parquet file...", flush=True)
+        sys.stdout.flush()
         df = pd.read_parquet(file_path)
-        print(f"✓ Successfully loaded {len(df):,} rows, {len(df.columns)} columns")
+        print(f"✓ Successfully loaded {len(df):,} rows, {len(df.columns)} columns", flush=True)
+        sys.stdout.flush()
         
         # 컬럼명 매핑 (원본 데이터 → 앱에서 사용하는 컬럼명)
         column_mapping = {
@@ -61,8 +71,11 @@ def load_data_from_huggingface():
         }
         
         # 컬럼명 변경
+        print(f"Applying column mapping...", flush=True)
+        sys.stdout.flush()
         df = df.rename(columns=column_mapping)
-        print(f"✓ Column mapping applied")
+        print(f"✓ Column mapping applied", flush=True)
+        sys.stdout.flush()
         
         # 필요한 컬럼 선택 (매핑된 컬럼 + 추가 필요 컬럼)
         required_columns = list(column_mapping.values())
@@ -75,15 +88,21 @@ def load_data_from_huggingface():
         
         if available_columns:
             df = df[available_columns]
-            print(f"✓ Selected {len(available_columns)} columns")
+            print(f"✓ Selected {len(available_columns)} columns", flush=True)
+            sys.stdout.flush()
         
+        print(f"✓ load_data_from_huggingface() completed successfully", flush=True)
+        sys.stdout.flush()
         return df
         
     except Exception as e:
-        error_msg = f"✗ Error loading from Hugging Face: {e}"
-        print(error_msg)
+        import sys
         import traceback
+        error_msg = f"✗ Error loading from Hugging Face: {e}"
+        print(error_msg, flush=True)
+        sys.stdout.flush()
         traceback.print_exc()
+        sys.stdout.flush()
         # Streamlit에 에러 표시
         st.error(f"데이터 로드 실패: {str(e)}")
         st.error("Hugging Face 데이터셋 접근 권한을 확인해주세요.")
@@ -95,34 +114,51 @@ def sync_data_storage():
     - 로컬 parquet 파일이 없으면 Hugging Face에서 다운로드
     - 다운로드한 파일을 data_storage/에 캐싱
     """
+    import sys
     os.makedirs(DATA_STORAGE_DIR, exist_ok=True)
     
     # Check for existing parquet files
     parquet_files = glob.glob(f"{DATA_STORAGE_DIR}/*.parquet")
     
     if parquet_files:
-        print(f"Found {len(parquet_files)} existing parquet file(s) in {DATA_STORAGE_DIR}/")
+        print(f"Found {len(parquet_files)} existing parquet file(s) in {DATA_STORAGE_DIR}/", flush=True)
+        sys.stdout.flush()
         return
     
-    print(f"No parquet files found in {DATA_STORAGE_DIR}/")
-    print("Attempting to download from Hugging Face...")
+    print(f"No parquet files found in {DATA_STORAGE_DIR}/", flush=True)
+    sys.stdout.flush()
+    print("Attempting to download from Hugging Face...", flush=True)
+    sys.stdout.flush()
     
     try:
         # Hugging Face에서 데이터 로드
+        print(f"Calling load_data_from_huggingface()...", flush=True)
+        sys.stdout.flush()
         df = load_data_from_huggingface()
+        print(f"✓ load_data_from_huggingface() returned successfully", flush=True)
+        sys.stdout.flush()
         
         # 로컬에 캐싱
         output_file = f"{DATA_STORAGE_DIR}/data_huggingface.parquet"
+        print(f"Caching to {output_file}...", flush=True)
+        sys.stdout.flush()
         df.to_parquet(output_file, index=False)
-        print(f"✓ Cached to {output_file}")
-        print(f"  Size: {os.path.getsize(output_file) / (1024*1024):.1f}MB")
+        print(f"✓ Cached to {output_file}", flush=True)
+        sys.stdout.flush()
+        print(f"  Size: {os.path.getsize(output_file) / (1024*1024):.1f}MB", flush=True)
+        sys.stdout.flush()
     except Exception as e:
-        print(f"\n⚠ Failed to load data from Hugging Face: {e}")
-        print("  Please check:")
-        print("  1. Repository ID is correct")
-        print("  2. Filename is correct")
-        print("  3. Token is valid (for private datasets)")
-        print("  4. Dataset exists and is accessible")
+        import traceback
+        print(f"\n⚠ Failed to load data from Hugging Face: {e}", flush=True)
+        sys.stdout.flush()
+        traceback.print_exc()
+        sys.stdout.flush()
+        print("  Please check:", flush=True)
+        print("  1. Repository ID is correct", flush=True)
+        print("  2. Filename is correct", flush=True)
+        print("  3. Token is valid (for private datasets)", flush=True)
+        print("  4. Dataset exists and is accessible", flush=True)
+        sys.stdout.flush()
         # 에러를 다시 발생시켜서 앱이 명확하게 실패하도록
         raise
 
