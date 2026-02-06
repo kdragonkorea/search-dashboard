@@ -1,0 +1,10 @@
+streamlit
+pandas
+openpyxl
+plotly
+statsmodels
+faker
+pyarrow
+wordcloud
+duckdb
+requests
