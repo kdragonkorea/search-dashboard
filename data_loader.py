@@ -153,13 +153,16 @@ def sync_data_storage():
         gdrive_config = GDRIVE_FILE_CONFIG.copy()
         
         # Override with Streamlit secrets if available
-        if hasattr(st, 'secrets') and 'gdrive' in st.secrets:
-            print("Using Google Drive config from Streamlit secrets")
-            for file_name, config in st.secrets['gdrive'].items():
-                gdrive_config[file_name] = {
-                    'file_id': config.get('file_id'),
-                    'enabled': config.get('enabled', False)
-                }
+        try:
+            if hasattr(st, 'secrets') and 'gdrive' in st.secrets:
+                print("Using Google Drive config from Streamlit secrets")
+                for file_name, config in st.secrets['gdrive'].items():
+                    gdrive_config[file_name] = {
+                        'file_id': config.get('file_id'),
+                        'enabled': config.get('enabled', False)
+                    }
+        except Exception as e:
+            print(f"Warning: Could not load secrets ({e}). Using default config.")
         
         # Try to download configured files
         downloaded_any = False
