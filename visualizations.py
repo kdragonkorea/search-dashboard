@@ -294,8 +294,8 @@ def plot_keyword_group_trend(df, keywords, title="Keyword Trend"):
             'bgcolor': 'rgba(255, 255, 255, 0.8)'  # 반투명 배경만 유지
         },
         hovermode="closest",
-        height=480,
-        margin=dict(t=70, b=60, l=60, r=180)  # 오른쪽 마진 180px
+        height=420,
+        margin=dict(t=70, b=80, l=60, r=180)  # 오른쪽 마진 180px, 하단 마진 증가
     )
     
     # Update hover template to show date and count
