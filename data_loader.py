@@ -110,101 +110,31 @@ def load_data_from_huggingface():
 
 def sync_data_storage():
     """
-    데이터 저장소 동기화
-    - 로컬 parquet 파일이 없으면 Hugging Face에서 다운로드
-    - 다운로드한 파일을 data_storage/에 캐싱
+    데이터 저장소 동기화 - Streamlit Cloud에서는 캐싱 건너뛰기
+    메모리 절약을 위해 Hugging Face에서 직접 로드
     """
     import sys
-    os.makedirs(DATA_STORAGE_DIR, exist_ok=True)
-    
-    # Check for existing parquet files
-    parquet_files = glob.glob(f"{DATA_STORAGE_DIR}/*.parquet")
-    
-    if parquet_files:
-        print(f"Found {len(parquet_files)} existing parquet file(s) in {DATA_STORAGE_DIR}/", flush=True)
-        sys.stdout.flush()
-        return
-    
-    print(f"No parquet files found in {DATA_STORAGE_DIR}/", flush=True)
+    print(f"Skipping local cache on Streamlit Cloud (memory optimization)", flush=True)
     sys.stdout.flush()
-    print("Attempting to download from Hugging Face...", flush=True)
-    sys.stdout.flush()
-    
-    try:
-        # Hugging Face에서 데이터 로드
-        print(f"Calling load_data_from_huggingface()...", flush=True)
-        sys.stdout.flush()
-        df = load_data_from_huggingface()
-        print(f"✓ load_data_from_huggingface() returned successfully", flush=True)
-        sys.stdout.flush()
-        
-        # 로컬에 캐싱
-        output_file = f"{DATA_STORAGE_DIR}/data_huggingface.parquet"
-        print(f"Caching to {output_file}...", flush=True)
-        sys.stdout.flush()
-        df.to_parquet(output_file, index=False)
-        print(f"✓ Cached to {output_file}", flush=True)
-        sys.stdout.flush()
-        print(f"  Size: {os.path.getsize(output_file) / (1024*1024):.1f}MB", flush=True)
-        sys.stdout.flush()
-    except Exception as e:
-        import traceback
-        print(f"\n⚠ Failed to load data from Hugging Face: {e}", flush=True)
-        sys.stdout.flush()
-        traceback.print_exc()
-        sys.stdout.flush()
-        print("  Please check:", flush=True)
-        print("  1. Repository ID is correct", flush=True)
-        print("  2. Filename is correct", flush=True)
-        print("  3. Token is valid (for private datasets)", flush=True)
-        print("  4. Dataset exists and is accessible", flush=True)
-        sys.stdout.flush()
-        # 에러를 다시 발생시켜서 앱이 명확하게 실패하도록
-        raise
+    # 아무 작업도 하지 않음 - load_data()에서 직접 HF에서 로드
 
 @st.cache_data(ttl=3600)
 def load_data():
     """
     데이터 로드 (캐싱 적용)
     
-    우선순위:
-    1. 로컬 data_storage/ 디렉토리의 parquet 파일
-    2. Hugging Face Hub에서 직접 로드
+    Streamlit Cloud 최적화: Hugging Face에서 직접 로드 (로컬 캐싱 건너뛰기)
     
     Returns:
         pd.DataFrame: 로드된 데이터프레임
     """
-    # 로컬 파일 확인
-    parquet_files = glob.glob(f"{DATA_STORAGE_DIR}/*.parquet")
-    
-    if parquet_files:
-        # 로컬 파일 사용
-        print(f"Loading data from {len(parquet_files)} local parquet file(s)...", flush=True)
-        import sys
-        sys.stdout.flush()
-        
-        # DuckDB로 빠르게 로드 - 메모리 절약을 위해 전체 로드
-        conn = duckdb.connect()
-        parquet_pattern = f"{DATA_STORAGE_DIR}/*.parquet"
-        query = f"SELECT * FROM read_parquet('{parquet_pattern}')"
-        df = conn.execute(query).df()
-        conn.close()
-        
-        print(f"✓ Loaded {len(df):,} rows from local storage", flush=True)
-        sys.stdout.flush()
-    else:
-        # Hugging Face에서 직접 로드
-        print("No local files found. Loading from Hugging Face Hub...")
-        df = load_data_from_huggingface()  # 에러 발생 시 여기서 raise됨
-        
-        # 로컬에 캐싱 (다음 실행 시 빠르게 로드)
-        try:
-            os.makedirs(DATA_STORAGE_DIR, exist_ok=True)
-            output_file = f"{DATA_STORAGE_DIR}/data_huggingface.parquet"
-            df.to_parquet(output_file, index=False)
-            print(f"✓ Cached to {output_file} for faster loading next time")
-        except Exception as e:
-            print(f"Warning: Could not cache data locally: {e}")
+    import sys
+    # Streamlit Cloud에서는 로컬 캐싱 건너뛰기 (메모리 절약)
+    print("Loading from Hugging Face Hub (no local caching)...", flush=True)
+    sys.stdout.flush()
+    df = load_data_from_huggingface()  # 에러 발생 시 여기서 raise됨
+    print(f"✓ Data loaded successfully", flush=True)
+    sys.stdout.flush()
     
     # 데이터 타입 변환 (중요: 숫자형을 문자열로 변환 후 날짜 파싱)
     if '검색일' in df.columns:
