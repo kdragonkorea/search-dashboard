@@ -1,10 +1,10 @@
-streamlit
-pandas
+streamlit>=1.31.0
+pandas>=2.0.0
 openpyxl
-plotly
+plotly>=5.18.0
 statsmodels
 faker
-pyarrow
+pyarrow>=14.0.0
 wordcloud
-duckdb
-requests
+duckdb>=0.9.0
+requests>=2.31.0
