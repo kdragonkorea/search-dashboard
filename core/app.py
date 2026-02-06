@@ -6,6 +6,7 @@ import data_loader
 import visualizations
 import os
 import io
+import glob
 import datetime
 import time
 import logging
@@ -147,15 +148,21 @@ def load_custom_css():
             /* 스피너 위치 조정 (패딩에 가려지지 않도록) */
             [data-testid="stSpinner"] {
                 position: fixed !important;
-                top: 50% !important;
+                top: 45% !important;
                 left: 50% !important;
                 transform: translate(-50%, -50%) !important;
                 z-index: 9999 !important;
+                background: rgba(255, 255, 255, 0.95) !important;
+                padding: 2rem !important;
+                border-radius: 10px !important;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
             }
             
             /* 스피너 텍스트 */
             [data-testid="stSpinner"] > div {
-                margin-top: 1rem !important;
+                font-size: 1.1rem !important;
+                color: #5E2BB8 !important;
+                font-weight: 500 !important;
             }
             
             /* 탭 컨텐츠 간격 최소화 */
@@ -261,7 +268,7 @@ load_custom_css()
 # [중요] 동기화는 캐시 외부에서 매번 실행하여 새 파일을 즉시 감지하도록 합니다.
 data_loader.sync_data_storage()
 
-@st.cache_data(ttl=3600, show_spinner="데이터를 메모리에 로드하고 있습니다...")
+@st.cache_data(ttl=3600, show_spinner=False)
 def get_initial_df():
     # 실제 데이터 로드 및 전처리만 캐싱
     raw = data_loader.load_data_range()
@@ -689,7 +696,18 @@ def render_charts(data_id, selected_keyword, plot_df):
             if fig_age: st.plotly_chart(fig_age, use_container_width=True)
 
 # Base DataFrame for initial scale
-df_full = get_initial_df()
+# 커스텀 스피너로 로딩 시간 표시
+import os
+data_exists = os.path.exists("data_storage") and len(glob.glob("data_storage/*.parquet")) > 0
+
+if data_exists:
+    # 캐시된 데이터가 있으면 빠름 (2-3초)
+    with st.spinner("데이터를 메모리에 로드하고 있습니다... (예상 시간: 2-3초)"):
+        df_full = get_initial_df()
+else:
+    # Hugging Face에서 다운로드하면 느림 (10-15초)
+    with st.spinner("Hugging Face에서 데이터를 다운로드하고 있습니다... (예상 시간: 10-15초)"):
+        df_full = get_initial_df()
 
 if df_full is not None and not df_full.empty:
     # Sidebar Filters
