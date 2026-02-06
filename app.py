@@ -1098,7 +1098,11 @@ if df_full is not None and not df_full.empty:
                     """, unsafe_allow_html=True)
                 
                     # Filter Trend DF for specific category history
-                    type_df = trend_df[trend_df['search_type'] == search_type]
+                    # search_type 컬럼이 없으면 전체 데이터 사용
+                    if 'search_type' in trend_df.columns:
+                        type_df = trend_df[trend_df['search_type'] == search_type]
+                    else:
+                        type_df = trend_df  # search_type 컬럼이 없으면 전체 데이터 사용
                 
                     # Calculate Stats
                     stats = visualizations.calculate_popular_keywords_stats(type_df)

@@ -83,6 +83,7 @@ def query_data_with_duckdb(start_date=None, end_date=None, use_aggregation=False
         
         if use_aggregation:
             # 집계 쿼리 (메모리 절약) - 일별/키워드별/속성별 집계
+            # 원본 파일의 컬럼명 사용 (영문)
             query = f"""
             SELECT 
                 logday,
@@ -91,7 +92,6 @@ def query_data_with_duckdb(start_date=None, end_date=None, use_aggregation=False
                 age,
                 gender,
                 tab,
-                search_type,
                 logweek,
                 SUM(total_count) as total_count,
                 SUM(result_total_count) as result_total_count,
@@ -99,25 +99,23 @@ def query_data_with_duckdb(start_date=None, end_date=None, use_aggregation=False
                 COUNT(*) as sessionid
             FROM read_parquet('{file_path}')
             {where_clause}
-            GROUP BY logday, search_keyword, pathcd, age, gender, tab, search_type, logweek
+            GROUP BY logday, search_keyword, pathcd, age, gender, tab, logweek
             """
         else:
-            # 원본 데이터 쿼리
+            # 원본 데이터 쿼리 (사용하지 않음 - 항상 집계 사용)
             query = f"""
             SELECT 
-                logday as 검색일,
-                search_keyword as 검색어,
-                total_count as 검색량,
-                result_total_count as 검색결과수,
-                pathcd as 속성,
-                age as 연령대,
-                gender as 성별,
-                tab as 탭,
-                search_type as 검색타입,
+                logday,
+                search_keyword,
+                total_count,
+                result_total_count,
+                pathcd,
+                age,
+                gender,
+                tab,
                 uidx,
                 sessionid,
-                logweek,
-                pathcd
+                logweek
             FROM read_parquet('{file_path}')
             {where_clause}
             """
@@ -138,11 +136,11 @@ def query_data_with_duckdb(start_date=None, end_date=None, use_aggregation=False
             'pathcd': 'pathcd',  # pathcd는 그대로
             'age': '연령대',
             'gender': '성별',
-            'tab': '탭',
-            'search_type': '검색타입'
+            'tab': '탭'
         }
         
-        df = df.rename(columns=column_mapping)
+        # 존재하는 컬럼만 변환
+        df = df.rename(columns={k: v for k, v in column_mapping.items() if k in df.columns})
         
         print(f"✓ Query completed: {len(df):,} rows, {len(df.columns)} columns", flush=True)
         sys.stdout.flush()
