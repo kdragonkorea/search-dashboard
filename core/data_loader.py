@@ -47,10 +47,35 @@ def load_data_from_huggingface():
         df = pd.read_parquet(file_path)
         print(f"✓ Successfully loaded {len(df):,} rows, {len(df.columns)} columns")
         
+        # 컬럼명 매핑 (원본 데이터 → 앱에서 사용하는 컬럼명)
+        column_mapping = {
+            'logday': '검색일',
+            'search_keyword': '검색어',
+            'total_count': '검색량',
+            'result_total_count': '검색결과수',
+            'pathcd': '속성',
+            'age': '연령대',
+            'gender': '성별',
+            'tab': '탭',
+            'search_type': '검색타입'
+        }
+        
+        # 컬럼명 변경
+        df = df.rename(columns=column_mapping)
+        print(f"✓ Column mapping applied")
+        
+        # 필요한 컬럼만 선택 (존재하는 컬럼만)
+        available_columns = [col for col in column_mapping.values() if col in df.columns]
+        if available_columns:
+            df = df[available_columns]
+            print(f"✓ Selected {len(available_columns)} columns")
+        
         return df
         
     except Exception as e:
         print(f"✗ Error loading from Hugging Face: {e}")
+        import traceback
+        traceback.print_exc()
         return None
 
 def sync_data_storage():
@@ -162,17 +187,27 @@ def preprocess_data(df):
     
     # 데이터 타입 변환
     if '검색일' in df.columns:
-        df['검색일'] = pd.to_datetime(df['검색일'])
+        df['검색일'] = pd.to_datetime(df['검색일'], format='%Y%m%d', errors='coerce')
     
     # 숫자형 컬럼 변환
-    numeric_columns = ['검색순위', '검색량', '검색실패율']
+    numeric_columns = ['검색순위', '검색량', '검색실패율', '검색결과수']
     for col in numeric_columns:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors='coerce')
     
+    # 검색실패율 계산 (검색결과수가 0이면 실패)
+    if '검색결과수' in df.columns and '검색실패율' not in df.columns:
+        df['검색실패율'] = (df['검색결과수'] == 0).astype(float) * 100.0
+    
+    # 검색순위 생성 (날짜별, 검색량 기준)
+    if '검색순위' not in df.columns and '검색량' in df.columns and '검색일' in df.columns:
+        df['검색순위'] = df.groupby('검색일')['검색량'].rank(ascending=False, method='dense')
+    
     # 결측값 처리 (컬럼이 존재하는 경우만)
     if '검색어' in df.columns:
         df = df.dropna(subset=['검색어'])
+    
+    print(f"✓ Preprocessing complete: {len(df):,} rows")
     
     return df
 
