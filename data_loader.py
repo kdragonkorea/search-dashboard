@@ -50,14 +50,14 @@ def get_parquet_file_path():
     return file_path
 
 @st.cache_data(ttl=3600)
-def query_data_with_duckdb(start_date=None, end_date=None, max_rows=500000):
+def query_data_with_duckdb(start_date=None, end_date=None, use_aggregation=False):
     """
     DuckDB로 Parquet 파일을 직접 쿼리 (메모리에 전체 로드하지 않음)
     
     Args:
         start_date: 시작 날짜 (YYYYMMDD 형식)
         end_date: 종료 날짜 (YYYYMMDD 형식)
-        max_rows: 최대 로드 행수 (메모리 보호)
+        use_aggregation: True면 일별 집계, False면 원본 데이터
     
     Returns:
         pd.DataFrame: 쿼리 결과
@@ -74,38 +74,53 @@ def query_data_with_duckdb(start_date=None, end_date=None, max_rows=500000):
         # DuckDB 연결
         conn = duckdb.connect()
         
-        # 컬럼명 매핑을 SQL에서 직접 수행
-        base_query = f"""
-        SELECT 
-            logday as 검색일,
-            search_keyword as 검색어,
-            total_count as 검색량,
-            result_total_count as 검색결과수,
-            pathcd as 속성,
-            age as 연령대,
-            gender as 성별,
-            tab as 탭,
-            search_type as 검색타입,
-            uidx,
-            sessionid,
-            logweek,
-            pathcd
-        FROM read_parquet('{file_path}')
-        """
-        
-        # 날짜 필터링 조건 추가
+        # 날짜 필터링 조건
         if start_date and end_date:
             where_clause = f"WHERE logday BETWEEN {start_date} AND {end_date}"
         else:
-            # 기본: 최근 60일 (10월 + 11월 데이터)
-            where_clause = f"WHERE logday >= (SELECT MAX(logday) - 60 FROM read_parquet('{file_path}'))"
+            # 기본: 전체 데이터
+            where_clause = ""
         
-        # 최종 쿼리
-        query = f"""
-        {base_query}
-        {where_clause}
-        LIMIT {max_rows}
-        """
+        if use_aggregation:
+            # 집계 쿼리 (메모리 절약)
+            query = f"""
+            SELECT 
+                logday as 검색일,
+                search_keyword as 검색어,
+                SUM(total_count) as 검색량,
+                SUM(result_total_count) as 검색결과수,
+                pathcd as 속성,
+                age as 연령대,
+                gender as 성별,
+                tab as 탭,
+                search_type as 검색타입,
+                COUNT(DISTINCT uidx) as uidx,
+                COUNT(*) as sessionid,
+                logweek
+            FROM read_parquet('{file_path}')
+            {where_clause}
+            GROUP BY 검색일, 검색어, 속성, 연령대, 성별, 탭, 검색타입, logweek
+            """
+        else:
+            # 원본 데이터 쿼리
+            query = f"""
+            SELECT 
+                logday as 검색일,
+                search_keyword as 검색어,
+                total_count as 검색량,
+                result_total_count as 검색결과수,
+                pathcd as 속성,
+                age as 연령대,
+                gender as 성별,
+                tab as 탭,
+                search_type as 검색타입,
+                uidx,
+                sessionid,
+                logweek,
+                pathcd
+            FROM read_parquet('{file_path}')
+            {where_clause}
+            """
         
         print(f"Executing query...", flush=True)
         sys.stdout.flush()
@@ -140,23 +155,31 @@ def sync_data_storage():
     # 아무 작업도 하지 않음 - load_data()에서 직접 HF에서 로드
 
 @st.cache_data(ttl=3600)
-def load_data(start_date=None, end_date=None):
+def load_data(start_date=None, end_date=None, use_aggregation=False):
     """
     데이터 로드 (DuckDB 쿼리 기반, 메모리 효율적)
     
     Args:
         start_date: 시작 날짜 (YYYYMMDD 형식)
         end_date: 종료 날짜 (YYYYMMDD 형식)
+        use_aggregation: True면 집계된 데이터, False면 원본 데이터
     
     Returns:
         pd.DataFrame: 쿼리된 데이터프레임
     """
     import sys
-    print("Loading data with DuckDB (memory-efficient)...", flush=True)
+    
+    # 날짜 필터가 없으면 집계 사용 (전체 데이터는 너무 큼)
+    if start_date is None and end_date is None:
+        print("Loading aggregated data (full dataset)...", flush=True)
+        use_aggregation = True
+    else:
+        print("Loading filtered data with DuckDB...", flush=True)
+    
     sys.stdout.flush()
     
     # DuckDB로 필요한 데이터만 쿼리
-    df = query_data_with_duckdb(start_date, end_date)
+    df = query_data_with_duckdb(start_date, end_date, use_aggregation)
     
     print(f"✓ Data loaded successfully: {len(df):,} rows", flush=True)
     sys.stdout.flush()
