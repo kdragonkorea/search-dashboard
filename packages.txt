@@ -1,1 +1,1 @@
-config/packages.txt
+libgomp1
