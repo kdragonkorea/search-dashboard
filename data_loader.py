@@ -97,8 +97,8 @@ def query_data_with_duckdb(start_date=None, end_date=None, max_rows=500000):
         if start_date and end_date:
             where_clause = f"WHERE logday BETWEEN {start_date} AND {end_date}"
         else:
-            # 기본: 최근 30일
-            where_clause = f"WHERE logday >= (SELECT MAX(logday) - 30 FROM read_parquet('{file_path}'))"
+            # 기본: 최근 60일 (10월 + 11월 데이터)
+            where_clause = f"WHERE logday >= (SELECT MAX(logday) - 60 FROM read_parquet('{file_path}'))"
         
         # 최종 쿼리
         query = f"""
