@@ -144,6 +144,20 @@ def load_custom_css():
                 padding-bottom: 1rem !important;
             }
             
+            /* 스피너 위치 조정 (패딩에 가려지지 않도록) */
+            [data-testid="stSpinner"] {
+                position: fixed !important;
+                top: 50% !important;
+                left: 50% !important;
+                transform: translate(-50%, -50%) !important;
+                z-index: 9999 !important;
+            }
+            
+            /* 스피너 텍스트 */
+            [data-testid="stSpinner"] > div {
+                margin-top: 1rem !important;
+            }
+            
             /* 탭 컨텐츠 간격 최소화 */
             [data-testid="stVerticalBlock"] > div {
                 gap: 0.3rem !important;
