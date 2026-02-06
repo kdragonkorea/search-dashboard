@@ -85,18 +85,18 @@ def query_data_with_duckdb(start_date=None, end_date=None, use_aggregation=False
             # 집계 쿼리 (메모리 절약) - 일별/키워드별/속성별 집계
             query = f"""
             SELECT 
-                logday as 검색일,
-                search_keyword as 검색어,
-                SUM(total_count) as 검색량,
-                SUM(result_total_count) as 검색결과수,
+                logday,
+                search_keyword,
                 pathcd,
-                age as 연령대,
-                gender as 성별,
-                tab as 탭,
-                search_type as 검색타입,
+                age,
+                gender,
+                tab,
+                search_type,
+                logweek,
+                SUM(total_count) as total_count,
+                SUM(result_total_count) as result_total_count,
                 COUNT(DISTINCT uidx) as uidx,
-                COUNT(*) as sessionid,
-                logweek
+                COUNT(*) as sessionid
             FROM read_parquet('{file_path}')
             {where_clause}
             GROUP BY logday, search_keyword, pathcd, age, gender, tab, search_type, logweek
@@ -128,6 +128,21 @@ def query_data_with_duckdb(start_date=None, end_date=None, use_aggregation=False
         # 쿼리 실행
         df = conn.execute(query).df()
         conn.close()
+        
+        # 컬럼명을 한글로 변환
+        column_mapping = {
+            'logday': '검색일',
+            'search_keyword': '검색어',
+            'total_count': '검색량',
+            'result_total_count': '검색결과수',
+            'pathcd': 'pathcd',  # pathcd는 그대로
+            'age': '연령대',
+            'gender': '성별',
+            'tab': '탭',
+            'search_type': '검색타입'
+        }
+        
+        df = df.rename(columns=column_mapping)
         
         print(f"✓ Query completed: {len(df):,} rows, {len(df.columns)} columns", flush=True)
         sys.stdout.flush()
