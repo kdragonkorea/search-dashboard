@@ -662,15 +662,16 @@ def plot_failed_keywords_wordcloud(df):
         
     # Generate WordCloud logic
     # Use custom font if available for Korean support
-    font_path = 'JOURNEYITSELF-REGULAR 3.TTF'
     use_default_font = False
     
     try:
-        # Use absolute path for font if possible or ensure it's found in current dir
-        font_file = 'JOURNEYITSELF-REGULAR 3.TTF'
+        # Use absolute path relative to this file's directory
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        font_file = os.path.join(current_dir, 'assets', 'JOURNEYITSELF-REGULAR 3.TTF')
+        
+        # Fallback to project root if not found
         if not os.path.exists(font_file):
-             # Fallback check if it's in the project root
-             font_file = os.path.join(os.getcwd(), 'JOURNEYITSELF-REGULAR 3.TTF')
+            font_file = os.path.join(os.path.dirname(current_dir), 'assets', 'JOURNEYITSELF-REGULAR 3.TTF')
 
         wc = WordCloud(
             font_path=font_file if os.path.exists(font_file) else None,
