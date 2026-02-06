@@ -64,8 +64,15 @@ def load_data_from_huggingface():
         df = df.rename(columns=column_mapping)
         print(f"✓ Column mapping applied")
         
-        # 필요한 컬럼만 선택 (존재하는 컬럼만)
-        available_columns = [col for col in column_mapping.values() if col in df.columns]
+        # 필요한 컬럼 선택 (매핑된 컬럼 + 추가 필요 컬럼)
+        required_columns = list(column_mapping.values())
+        additional_columns = ['uidx', 'sessionid', 'logweek', 'pathcd']  # 파이차트용 추가 컬럼
+        
+        # 존재하는 컬럼만 선택
+        available_columns = [col for col in required_columns + additional_columns if col in df.columns]
+        # 중복 제거
+        available_columns = list(dict.fromkeys(available_columns))
+        
         if available_columns:
             df = df[available_columns]
             print(f"✓ Selected {len(available_columns)} columns")
@@ -178,6 +185,35 @@ def load_data():
     # 검색순위 생성 (없으면 생성)
     if '검색순위' not in df.columns and '검색량' in df.columns and '검색일' in df.columns:
         df['검색순위'] = df.groupby('검색일')['검색량'].rank(ascending=False, method='dense')
+    
+    # 앱 호환성을 위한 영문 컬럼명 추가 (기존 한글 컬럼 유지)
+    df = df.copy()
+    
+    column_aliases = {
+        '검색일': 'search_date',
+        '검색어': 'search_keyword',
+        '검색량': 'total_count',
+        '검색결과수': 'result_total_count',
+        '검색실패율': 'fail_rate',
+        '검색순위': 'rank',
+        '속성': 'pathcd',
+        '연령대': 'age',
+        '성별': 'gender',
+        '탭': 'tab',
+        '검색타입': 'search_type'
+    }
+    
+    for korean, english in column_aliases.items():
+        if korean in df.columns and english not in df.columns:
+            df[english] = df[korean]
+    
+    # sessionid 컬럼이 없으면 생성 (집계용)
+    if 'sessionid' not in df.columns:
+        df['sessionid'] = range(len(df))
+    
+    # logweek 컬럼이 없으면 생성 (주차 정보)
+    if 'logweek' not in df.columns and 'search_date' in df.columns:
+        df['logweek'] = df['search_date'].dt.isocalendar().week
     
     print(f"✓ Data ready: {len(df):,} rows, {len(df.columns)} columns")
     
