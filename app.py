@@ -146,7 +146,19 @@ def load_custom_css():
             
             /* 탭 컨텐츠 간격 최소화 */
             [data-testid="stVerticalBlock"] > div {
-                gap: 0.5rem !important;
+                gap: 0.3rem !important;
+            }
+            
+            /* 모든 요소 간격 줄이기 */
+            .element-container {
+                margin-top: 0.3rem !important;
+                margin-bottom: 0.3rem !important;
+            }
+            
+            /* 차트 컨테이너 간격 줄이기 */
+            [data-testid="stPlotlyChart"] {
+                margin-top: 0.5rem !important;
+                margin-bottom: 0.5rem !important;
             }
             
             /* Ensure charts take full width */
@@ -170,20 +182,14 @@ def load_custom_css():
                 color: var(--text-color) !important;
                 font-size: 1.3rem !important;
                 font-weight: 600 !important;
-                margin-bottom: 1rem !important;
-            }
-            
-            /* Chart spacing improvements */
-            [data-testid="stPlotlyChart"] {
-                width: 100% !important;
-                margin-top: 1.5rem !important;
-                margin-bottom: 2rem !important;
+                margin-top: 0.3rem !important;
+                margin-bottom: 0.3rem !important;
             }
             
             /* Table spacing */
             [data-testid="stDataFrame"] {
-                margin-top: 1rem !important;
-                margin-bottom: 2rem !important;
+                margin-top: 0.5rem !important;
+                margin-bottom: 1rem !important;
             }
             
             /* Improve readability with better line height */
@@ -802,7 +808,7 @@ if df_full is not None and not df_full.empty:
             
             # 타이틀 스타일 (가독성 개선)
             st.markdown("""
-                <div style='text-align: left; margin-bottom: 10px; margin-top: 20px;'>
+                <div style='text-align: left; margin-bottom: 5px; margin-top: 10px;'>
                     <p class='section-title' style='font-family: Journey; font-size: 1.3rem; font-weight: bold; color: #2a3f5f;'>
                         분석할 키워드 검색
                     </p>
@@ -874,7 +880,7 @@ if df_full is not None and not df_full.empty:
             
                 with col1:
                     st.markdown("""
-                        <div style='text-align: left; margin-bottom: 10px; margin-top: 30px;'>
+                        <div style='text-align: left; margin-bottom: 5px; margin-top: 10px;'>
                             <p class='section-title' style='font-family: Journey; font-size: 1.3rem; font-weight: bold; color: #2a3f5f;'>
                                 Top 100 검색어 순위
                             </p>
@@ -1044,7 +1050,7 @@ if df_full is not None and not df_full.empty:
                 with cols[i]:
                     # 섹션 제목 (가독성 개선)
                     st.markdown(f"""
-                        <div style='text-align: left; margin-bottom: 10px; margin-top: 30px;'>
+                        <div style='text-align: left; margin-bottom: 5px; margin-top: 10px;'>
                             <p class='section-title' style='font-family: Journey; font-size: 1.3rem; font-weight: bold; color: #2a3f5f;'>
                                 {label}
                             </p>
@@ -1140,7 +1146,7 @@ if df_full is not None and not df_full.empty:
                 with age_cols[i]:
                     # 섹션 제목 (가독성 개선)
                     st.markdown(f"""
-                        <div style='text-align: left; margin-bottom: 10px; margin-top: 30px;'>
+                        <div style='text-align: left; margin-bottom: 5px; margin-top: 10px;'>
                             <p class='section-title' style='font-family: Journey; font-size: 1.3rem; font-weight: bold; color: #2a3f5f;'>
                                 {age_label}
                             </p>
@@ -1253,7 +1259,7 @@ if df_full is not None and not df_full.empty:
             # --- LEFT: 이번 주 실패 검색어 Top 100 ---
             with col1:
                 st.markdown("""
-                    <div style='text-align: left; margin-bottom: 10px; margin-top: 30px;'>
+                    <div style='text-align: left; margin-bottom: 5px; margin-top: 10px;'>
                         <p class='section-title' style='font-family: Journey; font-size: 1.3rem; font-weight: bold; color: #2a3f5f;'>
                             이번 주 실패 검색어 Top 100
                         </p>
