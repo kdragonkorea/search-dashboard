@@ -682,7 +682,10 @@ if df_full is not None and not df_full.empty:
     st.sidebar.header("필터 설정")
     
     # [UPDATED] 데이터셋의 실제 날짜 범위 사용
-    if 'search_date' in df_full.columns:
+    if '검색일' in df_full.columns:
+        latest_data_date = df_full['검색일'].max().date()
+        earliest_data_date = df_full['검색일'].min().date()
+    elif 'search_date' in df_full.columns:
         latest_data_date = df_full['search_date'].max().date()
         earliest_data_date = df_full['search_date'].min().date()
     else:

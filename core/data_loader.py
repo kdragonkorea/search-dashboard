@@ -221,6 +221,36 @@ def preprocess_data(df):
     if '검색어' in df.columns:
         df = df.dropna(subset=['검색어'])
     
+    # 앱 호환성을 위한 영문 컬럼명 추가 (기존 한글 컬럼 유지)
+    # SettingWithCopyWarning 방지를 위해 copy() 사용
+    df = df.copy()
+    
+    column_aliases = {
+        '검색일': 'search_date',
+        '검색어': 'search_keyword',
+        '검색량': 'total_count',
+        '검색결과수': 'result_total_count',
+        '검색실패율': 'fail_rate',
+        '검색순위': 'rank',
+        '속성': 'pathcd',
+        '연령대': 'age',
+        '성별': 'gender',
+        '탭': 'tab',
+        '검색타입': 'search_type'
+    }
+    
+    for korean, english in column_aliases.items():
+        if korean in df.columns and english not in df.columns:
+            df[english] = df[korean]
+    
+    # sessionid 컬럼이 없으면 생성 (집계용)
+    if 'sessionid' not in df.columns:
+        df['sessionid'] = range(len(df))
+    
+    # logweek 컬럼이 없으면 생성 (주차 정보)
+    if 'logweek' not in df.columns and 'search_date' in df.columns:
+        df['logweek'] = df['search_date'].dt.isocalendar().week
+    
     print(f"✓ Preprocessing complete: {len(df):,} rows")
     
     return df
