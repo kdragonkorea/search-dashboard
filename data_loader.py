@@ -72,12 +72,14 @@ def load_data_range(start_date=None, end_date=None):
         
         # [중요] 원본 UI가 'sessionid' 컬럼의 유니크한 개수를 셀 수 있도록 
         # 요약된 sessions 값을 수치로 강제 매핑합니다. 
-        # 원본 UI 코드(예: visualizations.py 32라인)가 sessionid를 count() 하므로 
-        # 이를 고려하여 최대한 데이터를 맞춤 제공합니다.
         df['sessionid'] = df['sessions'] 
         df['total_count'] = df['searches']
-        df['result_total_count'] = df['searches'] # 실패 검색어는 별도 요약 테이블 필요 (곧 추가)
         
+        # [NEW] 실패 검색어 로직 복구
+        # is_failed가 1이면 result_total_count를 0으로 설정하여 원본 UI 필터가 작동하게 함
+        df['result_total_count'] = df['is_failed'].apply(lambda x: 0 if x == 1 else 1)
+        
+        # 속성 매핑 (visualizations.py 호환용)
         df['속성'] = df['pathcd']
         df['연령대'] = df['age'].fillna('미분류')
         df['성별'] = df['gender'].fillna('미분류')

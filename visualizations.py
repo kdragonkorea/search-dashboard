@@ -611,21 +611,9 @@ def get_failed_keywords(df):
     # 3. Apply Preprocessing (IPs + Regex)
     temp_df = preprocess_failed_keyword_data(temp_df)
     
-    # 5. Aggregation & Ranking
-    # Logic: Count distinct (logweek, sessionid) pairs per keyword (User Request)
-    if 'logweek' in temp_df.columns and 'sessionid' in temp_df.columns:
-        # One failure count per session per week per keyword
-        # (e.g., Session A fails on "Test" in W1 and W2 -> Count 2)
-        unique_failures = temp_df.drop_duplicates(subset=['logweek', 'sessionid', 'search_keyword'])
-        results = unique_failures.groupby('search_keyword').size().reset_index(name='cnt')
-    elif 'sessionid' in temp_df.columns:
-        # Fallback to global unique session if logweek missing
-        results = temp_df.groupby('search_keyword')['sessionid'].nunique().reset_index()
-        results.columns = ['search_keyword', 'cnt']
-    else:
-        # Fallback to raw count
-        results = temp_df['search_keyword'].value_counts().reset_index()
-        results.columns = ['search_keyword', 'cnt']
+    # 5. Aggregation & Ranking (합계 방식으로 수정)
+    # 이제 sessionid 컬럼에 이미 합산된 실패 세션수가 들어있으므로 sum()을 사용합니다.
+    results = temp_df.groupby('search_keyword')['sessionid'].sum().reset_index(name='cnt')
     
     # Sort by Count DESC, Keyword ASC
     results = results.sort_values(by=['cnt', 'search_keyword'], ascending=[False, True])
