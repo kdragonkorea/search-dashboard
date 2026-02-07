@@ -643,7 +643,7 @@ def render_charts(data_id, selected_keyword, plot_df):
                 if not daily_counts.empty:
                     fig1 = create_bar_chart_from_aggregated(daily_counts, week_ranges)
                     if fig1:
-                        st.plotly_chart(fig1, use_container_width=True)
+                        st.plotly_chart(fig1, width="stretch")
                     else:
                         st.info("시각화할 데이터가 없습니다.")
                 else:
@@ -655,7 +655,7 @@ def render_charts(data_id, selected_keyword, plot_df):
                 if not daily_agg.empty:
                     fig_line = create_line_chart_from_aggregated(daily_agg)
                     if fig_line:
-                        st.plotly_chart(fig_line, use_container_width=True)
+                        st.plotly_chart(fig_line, width="stretch")
                     else:
                         st.info("시각화할 데이터가 없습니다.")
                 else:
@@ -677,7 +677,7 @@ def render_charts(data_id, selected_keyword, plot_df):
                 "채널 비중",
                 ["#5E2BB8", "#8A63D2", "#B59CE6"]
             )
-            if fig_path: st.plotly_chart(fig_path, use_container_width=True)
+            if fig_path: st.plotly_chart(fig_path, width="stretch")
         
         with pie_col2:
             fig_login = create_pie_chart(
@@ -685,7 +685,7 @@ def render_charts(data_id, selected_keyword, plot_df):
                 "로그인 비중",
                 ["#5E2BB8", "#B59CE6"]
             )
-            if fig_login: st.plotly_chart(fig_login, use_container_width=True)
+            if fig_login: st.plotly_chart(fig_login, width="stretch")
         
         with pie_col3:
             fig_gender = create_pie_chart(
@@ -693,7 +693,7 @@ def render_charts(data_id, selected_keyword, plot_df):
                 "성별 비중",
                 ["#5E2BB8", "#B59CE6"]
             )
-            if fig_gender: st.plotly_chart(fig_gender, use_container_width=True)
+            if fig_gender: st.plotly_chart(fig_gender, width="stretch")
         
         with pie_col4:
             fig_age = create_pie_chart(
@@ -701,7 +701,7 @@ def render_charts(data_id, selected_keyword, plot_df):
                 "연령 비중",
                 ["#B59CE6", "#8A63D2", "#7445C7", "#5E2BB8"]
             )
-            if fig_age: st.plotly_chart(fig_age, use_container_width=True)
+            if fig_age: st.plotly_chart(fig_age, width="stretch")
 
 # Base DataFrame for initial scale
 # 커스텀 스피너로 로딩 시간 표시
@@ -1076,7 +1076,7 @@ if df_full is not None and not df_full.empty:
                     # Display table
                     st.dataframe(
                         styled_df, 
-                        use_container_width=True, 
+                        width="stretch", 
                         height=800, 
                         hide_index=True
                     )
@@ -1091,7 +1091,7 @@ if df_full is not None and not df_full.empty:
                         fig_top5 = visualizations.plot_keyword_group_trend(
                             trend_df, top5_keywords, title="1~5위 키워드별 검색량 추이"
                         )
-                        st.plotly_chart(fig_top5, use_container_width=True)
+                        st.plotly_chart(fig_top5, width="stretch")
                 
                     # Top 6-10 Chart
                     next5_keywords = stats_df.sort_values('rank').iloc[5:10]['keyword'].tolist()
@@ -1099,7 +1099,7 @@ if df_full is not None and not df_full.empty:
                         fig_next5 = visualizations.plot_keyword_group_trend(
                             trend_df, next5_keywords, title="6~10위 키워드별 검색량 추이"
                         )
-                        st.plotly_chart(fig_next5, use_container_width=True)
+                        st.plotly_chart(fig_next5, width="stretch")
             else:
                 st.info("데이터가 충분하지 않습니다.")
 
@@ -1226,7 +1226,7 @@ if df_full is not None and not df_full.empty:
                     
                         st.dataframe(
                             styled, 
-                            use_container_width=True, 
+                            width="stretch", 
                             height=800, 
                             hide_index=True
                         )
@@ -1327,7 +1327,7 @@ if df_full is not None and not df_full.empty:
                                 {'selector': 'td.col4', 'props': [('text-align', 'center !important')]}
                             ])
                     
-                        st.dataframe(age_styled, use_container_width=True, height=800, hide_index=True)
+                        st.dataframe(age_styled, width="stretch", height=800, hide_index=True)
                     else:
                         st.info(f"{age_label} 데이터 없음")
 
@@ -1421,7 +1421,7 @@ if df_full is not None and not df_full.empty:
                             {'selector': 'td.col3', 'props': [('text-align', 'right !important')]},
                             {'selector': 'td.col4', 'props': [('text-align', 'center !important')]}
                         ])
-                    st.dataframe(this_styled, use_container_width=True, height=800, hide_index=True)
+                    st.dataframe(this_styled, width="stretch", height=800, hide_index=True)
                 else:
                     st.info("이번 주 실패 검색어 데이터가 없습니다.")
         
@@ -1440,7 +1440,7 @@ if df_full is not None and not df_full.empty:
                         fig_top5_failed = visualizations.plot_keyword_group_trend(
                             failed_trend_df, top5_failed, title="1~5위 실패검색어 추이"
                         )
-                        st.plotly_chart(fig_top5_failed, use_container_width=True)
+                        st.plotly_chart(fig_top5_failed, width="stretch")
                 
                     # Top 6-10 Failed Keywords Chart
                     next5_failed = failed_stats_df.sort_values('rank').iloc[5:10]['search_keyword'].tolist()
@@ -1448,7 +1448,7 @@ if df_full is not None and not df_full.empty:
                         fig_next5_failed = visualizations.plot_keyword_group_trend(
                             failed_trend_df, next5_failed, title="6~10위 실패검색어 추이"
                         )
-                        st.plotly_chart(fig_next5_failed, use_container_width=True)
+                        st.plotly_chart(fig_next5_failed, width="stretch")
                 else:
                     st.info("차트를 표시할 데이터가 없습니다.")
     else:
