@@ -148,12 +148,12 @@ def load_data_range(start_date=None, end_date=None):
         df['pathcd'] = df['pathcd'].map(lambda x: path_map.get(x, x))
         df['속성'] = df['pathcd']
         
-        # 3. 1.77M 전수 수치 매핑 (데이터 요약 시 이미 sessions, searches로 합산됨)
-        # 원본 UI는 세션수를 sessionid 컬럼의 개수나 합계로 계산하므로 이를 맞춰줍니다.
+        # 3. 1.77M 전수 수치 매핑
+        df['logweek'] = df['logweek'].astype(int)
         df['sessionid'] = df['sessions'].astype(int)
         df['uidx'] = df['users'].astype(int)
         df['total_count'] = df['searches'].astype(int)
-        df['result_total_count'] = df['searches'].astype(int) # 실패 검색어는 별도 필터링
+        df['result_total_count'] = df['searches'].astype(int)
         
         # 4. 연령/성별 보정
         df['연령대'] = df['age'].fillna('Unknown')
