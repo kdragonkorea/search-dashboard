@@ -297,9 +297,16 @@ def get_daily_aggregated(data_id, keyword):
         return pd.DataFrame()
     
     # 집계
-    daily = df.groupby('search_date')['sessionid'].count().reset_index()
+    daily = df.groupby('search_date')['sessionid'].sum().reset_index()
     daily.columns = ['Date', 'Count']
-    return daily.sort_values('Date')
+    # 주간 리샘플링을 위해 search_date 기준 정렬
+    df = df.sort_values('search_date')
+    df_temp = df.set_index('search_date')
+    
+    # 주간 집계 (합산 방식)
+    weekly = df_temp.resample('W-MON')['sessionid'].sum().reset_index()
+    weekly.columns = ['Date', 'Count']
+    return daily
 
 # [NEW] 전체 키워드별 집계 데이터를 미리 계산
 @st.cache_data(ttl=3600)
@@ -320,11 +327,16 @@ def precompute_all_keyword_aggregations(data_id):
     
     # "전체" 집계
     result['전체'] = {
-        'daily': df.groupby('search_date')['sessionid'].count().to_dict(),
+        'daily': df.groupby('search_date')['sessionid'].sum().to_dict(),
         'weekly': df.groupby(['logweek', df["search_date"].dt.dayofweek]).agg(
-            session_count=('sessionid', 'count'),
+            session_count=('sessionid', 'sum'),
             actual_date=('search_date', 'min')
         ).reset_index(),
+        # 4가지 집계 수행
+        'path_counts': df.groupby('속성')['sessionid'].sum().reset_index(),
+        'login_counts': df.groupby('login_status')['sessionid'].sum().reset_index(),
+        'gender_counts': df.groupby('성별')['sessionid'].sum().reset_index(),
+        'age_counts': df.groupby('연령대')['sessionid'].sum().reset_index(),
         'week_ranges': df.groupby('logweek')['search_date'].agg(['min', 'max']).reset_index()
     }
     

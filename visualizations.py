@@ -29,7 +29,7 @@ def plot_weekly_trend(df):
 
     # Group by logweek and day of week, capture the specific date
     daily_counts = df.groupby(['logweek', df["search_date"].dt.dayofweek]).agg(
-        session_count=('sessionid', 'count'),
+        session_count=('sessionid', 'sum'), # [UPDATED] 1.77M 건 반영을 위해 합계로 변경
         actual_date=('search_date', 'min')
     ).reset_index()
     daily_counts.columns = ['logweek', 'day_num', 'Session Count', 'actual_date']
@@ -140,8 +140,8 @@ def calculate_popular_keywords_stats(df):
     this_week = weeks[-1]
     prev_week = weeks[-2] if len(weeks) > 1 else None
     
-    # Aggregation
-    weekly_stats = df.groupby(['logweek', target_keyword_col])['sessionid'].count().reset_index()
+    # Aggregation (합계 방식)
+    weekly_stats = df.groupby(['logweek', target_keyword_col])['sessionid'].sum().reset_index()
     weekly_stats.columns = ['logweek', 'keyword', 'count']
     
     # Current Week Stats
@@ -201,7 +201,7 @@ def plot_keyword_group_trend(df, keywords, title="Keyword Trend"):
     recent_weeks = all_weeks[-8:]
     
     mask = (df[target_keyword_col].isin(keywords)) & (df['logweek'].isin(recent_weeks))
-    trend_data = df[mask].groupby(['logweek', target_keyword_col])['sessionid'].count().reset_index()
+    trend_data = df[mask].groupby(['logweek', target_keyword_col])['sessionid'].sum().reset_index()
     trend_data.columns = ['Week', 'Keyword', 'Count']
     
     # Add Date Range Labels for Weeks (YY/MM/DD format - 2 digit year)
@@ -369,8 +369,7 @@ def plot_login_status_distribution(df):
         return None
         
     temp_df = df.copy()
-    temp_df['status'] = temp_df['uidx'].apply(lambda x: '로그인' if 'C' in str(x) else '비로그인')
-    status_counts = temp_df['status'].value_counts().reset_index()
+    status_counts = temp_df.groupby('login_status')['sessionid'].sum().reset_index()
     status_counts.columns = ['Status', 'Count']
     
     # Sort to ensure '비로그인' is first (Dark Purple) and '로그인' is second (Light Purple)
@@ -404,9 +403,7 @@ def plot_gender_distribution(df):
         return None
         
     temp_df = df.copy()
-    gender_map = {'F': '여성', 'M': '남성'}
-    temp_df['Gender_Label'] = temp_df['gender'].map(gender_map)
-    gender_counts = temp_df.dropna(subset=['Gender_Label'])['Gender_Label'].value_counts().reset_index()
+    gender_counts = temp_df.groupby('성별')['sessionid'].sum().reset_index()
     gender_counts.columns = ['Gender', 'Count']
     
     # 로그인 여부 비중과 동일한 색상 (#5E2BB8, #B59CE6) 적용
@@ -439,8 +436,8 @@ def plot_age_distribution(df):
     if df is None or 'age' not in df.columns:
         return None
         
-    temp_df = df[df['age'] != '미분류'].copy()
-    age_counts = temp_df['age'].value_counts().reset_index()
+    temp_df = df[df['연령대'] != '미분류'].copy()
+    age_counts = temp_df.groupby('연령대')['sessionid'].sum().reset_index()
     age_counts.columns = ['Age', 'Count']
     
     # Sort order
