@@ -45,12 +45,28 @@ def load_data_range(start_date=None, end_date=None):
     db_start = to_int(actual_start)
     db_end = to_int(end_date) if end_date else 20251130
 
-    # 2. 데이터 로드 (행수 기반 집계를 위해 session_count 사용)
+    # 2. 데이터 로드 (페이지네이션 적용하여 1,000건 제한 돌파)
+    all_data = []
+    batch_size = 5000
+    offset = 0
+    
     try:
-        # daily_keyword_summary는 이미 원본 행수를 sessions 필드에 합산해둔 상태
-        res = supabase.table("daily_keyword_summary").select("*").gte("logday", db_start).lte("logday", db_end).execute()
-        df = pd.DataFrame(res.data)
-    except:
+        while True:
+            query = supabase.table("daily_keyword_summary").select("*")
+            query = query.gte("logday", db_start).lte("logday", db_end)
+            res = query.range(offset, offset + batch_size - 1).execute()
+            
+            if not res.data:
+                break
+            
+            all_data.extend(res.data)
+            if len(res.data) < batch_size:
+                break
+            offset += batch_size
+            
+        df = pd.DataFrame(all_data)
+    except Exception as e:
+        st.error(f"데이터 로드 중 오류 발생: {e}")
         return pd.DataFrame()
 
     if not df.empty:
