@@ -749,9 +749,9 @@ if df_full is not None and not df_full.empty:
                 st.session_state['cached_top_keywords'] = top_keywords_df
                 st.session_state['cached_attr_metrics'] = attr_metrics_df
                 st.session_state['cached_date_range'] = (start_date, end_date)
+                st.session_state['cached_base_df'] = top_keywords_df
                 
-                # [FAST FALLBACK] 랭킹용 filtered_df도 서버 상위 리스트로 대체하여 로딩 100초 제거
-                st.session_state['cached_base_df'] = top_keywords_df # 랭킹용으로 전용
+                filtered_df = top_keywords_df # [FIXED] filtered_df 정의 추가
         else:
             full_daily_trend = st.session_state.get('cached_full_daily_trend', pd.DataFrame())
             filtered_df = st.session_state.get('cached_base_df', pd.DataFrame())

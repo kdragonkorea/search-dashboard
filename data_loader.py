@@ -57,7 +57,7 @@ def get_top_keywords_server(start_date, end_date, limit=100):
     """[ULTRA-FAST] 474만 건 전수 기반 인기 검색어 결과를 가져옵니다."""
     supabase = get_supabase_client()
     try:
-        res = supabase.rpc('get_top_keywords', {
+        res = supabase.rpc('get_top_keywords_agg', { # hint에서 추천한 이름으로 변경
             'p_start_date': _to_int_date(start_date),
             'p_end_date': _to_int_date(end_date),
             'p_limit': limit
@@ -76,7 +76,7 @@ def get_attr_stats_server(start_date, end_date):
     """[ULTRA-FAST] 474만 건 전수 기반 속성(성별/연령/경로) 통계를 가져옵니다."""
     supabase = get_supabase_client()
     try:
-        res = supabase.rpc('get_attr_stats_v2', {
+        res = supabase.rpc('get_attr_metrics_v2', { # hint에서 추천한 이름으로 변경
             'p_start_date': _to_int_date(start_date),
             'p_end_date': _to_int_date(end_date)
         }).execute()
