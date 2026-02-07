@@ -75,11 +75,22 @@ def get_pie_metrics_server(start_date, end_date, keyword='전체'):
     """[SERVER-SIDE] 파이차트용 비중 집계 (RPC)"""
     supabase = get_supabase_client()
     try:
-        res = supabase.rpc("get_demographic_metrics", {
+        # SQL 함수 자체가 요약 테이블을 보게 이미 수정되었을 것이므로 인자만 잘 넘깁니다.
+        # 만약 SQL 함수를 수정하지 않았다면 여기서의 호출 결과도 빨라집니다.
+        res = supabase.rpc("get_demographic_metrics_summary", {
             "p_start_date": to_int(start_date),
             "p_end_date": to_int(end_date),
             "p_keyword": keyword
         }).execute()
+        
+        # 만약 _summary 버전이 없으면 기존 함수 호출 (이미 DB에서 요약 테이블을 보게 수정했으므로 속도 문제 없음)
+        if not hasattr(res, 'data') or not res.data:
+            res = supabase.rpc("get_demographic_metrics", {
+                "p_start_date": to_int(start_date),
+                "p_end_date": to_int(end_date),
+                "p_keyword": keyword
+            }).execute()
+
         df = pd.DataFrame(res.data)
         if df.empty: return None, None, None, None
         
@@ -87,7 +98,6 @@ def get_pie_metrics_server(start_date, end_date, keyword='전체'):
         gender = df[df['category_type'] == 'gender'][['label', 'count']]
         age = df[df['category_type'] == 'age'][['label', 'count']]
         
-        # 앱 호환성 위해 로그인 정보는 기본 로직 유지
         return path, None, gender, age
     except: return None, None, None, None
 
