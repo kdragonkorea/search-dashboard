@@ -279,34 +279,49 @@ def get_initial_df():
 
 # [NEW] 집계 데이터 캐싱 - 핵심 성능 개선
 @st.cache_data(ttl=3600)
-def get_daily_aggregated(data_id, keyword):
+def get_daily_aggregated(data_id, keyword, start_date, end_date):
     """
-    일자별 집계 데이터를 캐싱 (선형 차트용)
-    data_id: 데이터 고유 식별자 (날짜범위 + 행수)
+    일자별 집계 데이터를 캐싱 (선형 차트용) - [SERVER-SIDE OPTIMIZED]
     """
-    # 세션 상태에서 필터링된 데이터 가져오기 (접속 경로 필터 적용됨)
-    if 'cached_filtered_df' not in st.session_state:
-        return pd.DataFrame()
+    if keyword == "전체":
+        # 세션에 저장된 전체 일자별 트렌드 반환
+        return st.session_state.get('cached_full_daily_trend', pd.DataFrame())
     
-    df = st.session_state['cached_filtered_df']
-    
-    if keyword != "전체":
-        df = df[df['search_keyword'] == keyword]
-    
-    if df.empty:
-        return pd.DataFrame()
-    
-    # 집계
-    daily = df.groupby('search_date')['sessionid'].sum().reset_index()
-    daily.columns = ['Date', 'Count']
-    # 주간 리샘플링을 위해 search_date 기준 정렬
-    df = df.sort_values('search_date')
-    df_temp = df.set_index('search_date')
-    
-    # 주간 집계 (합산 방식)
-    weekly = df_temp.resample('W-MON')['sessionid'].sum().reset_index()
-    weekly.columns = ['Date', 'Count']
+    # 특정 키워드 검색 시에만 서버에 전수 데이터 요청 (매우 빠름)
+    with st.spinner(f"'{keyword}' 전수 분석 중..."):
+        daily = data_loader.get_keyword_trend_server(keyword, start_date, end_date)
     return daily
+
+@st.cache_data(ttl=3600)
+def get_weekly_aggregated(data_id, keyword, start_date, end_date):
+    """
+    주간 집계 데이터를 캐싱 (막대 차트용) - [SERVER-SIDE OPTIMIZED]
+    """
+    daily = get_daily_aggregated(data_id, keyword, start_date, end_date)
+    
+    if daily.empty:
+        return pd.DataFrame(), pd.DataFrame() # Return two empty DataFrames to match expected signature
+    
+    # 이미 집계된 일자별 데이터를 주간으로 리샘플링
+    df_temp = daily.copy()
+    df_temp['search_date'] = pd.to_datetime(df_temp['Date'])
+    df_temp = df_temp.set_index('search_date')
+    
+    # 주별 logweek 생성 (app.py 기준과 맞춤)
+    week_ranges = df_temp.resample('W-MON')['Date'].agg(['min', 'max']).reset_index()
+    week_ranges['logweek'] = week_ranges['min'].dt.isocalendar().week
+    week_ranges['Label'] = week_ranges.apply(
+        lambda x: f"{x['min'].strftime('%y/%m/%d')} ~ {x['max'].strftime('%y/%m/%d')}", axis=1
+    )
+    
+    # 요일별 집계
+    daily_counts = df_temp.groupby([df_temp.index.isocalendar().week, df_temp.index.dayofweek]).agg(
+        session_count=('Count', 'sum'),
+        actual_date=('Date', 'min')
+    ).reset_index()
+    daily_counts.columns = ['logweek', 'day_num', 'Session Count', 'actual_date']
+    
+    return daily_counts, week_ranges
 
 # [NEW] 전체 키워드별 집계 데이터를 미리 계산
 @st.cache_data(ttl=3600)
@@ -368,37 +383,6 @@ def get_daily_aggregated_fast(data_id, keyword, precomputed):
     df = pd.DataFrame(list(daily_dict.items()), columns=['Date', 'Count'])
     df['Date'] = pd.to_datetime(df['Date'])
     return df.sort_values('Date')
-
-@st.cache_data(ttl=3600)
-def get_weekly_aggregated(data_id, keyword):
-    """
-    주차별/요일별 집계 데이터를 캐싱 (막대형 차트용)
-    """
-    if 'cached_filtered_df' not in st.session_state:
-        return pd.DataFrame(), pd.DataFrame()
-    
-    df = st.session_state['cached_filtered_df']
-    
-    if keyword != "전체":
-        df = df[df['search_keyword'] == keyword]
-    
-    if df.empty:
-        return pd.DataFrame(), pd.DataFrame()
-    
-    # 주차별 날짜 범위
-    week_ranges = df.groupby('logweek')['search_date'].agg(['min', 'max']).reset_index()
-    week_ranges['Label'] = week_ranges.apply(
-        lambda x: f"{x['min'].strftime('%y/%m/%d')} ~ {x['max'].strftime('%y/%m/%d')}", axis=1
-    )
-    
-    # 요일별 집계
-    daily_counts = df.groupby(['logweek', df["search_date"].dt.dayofweek]).agg(
-        session_count=('sessionid', 'count'),
-        actual_date=('search_date', 'min')
-    ).reset_index()
-    daily_counts.columns = ['logweek', 'day_num', 'Session Count', 'actual_date']
-    
-    return daily_counts, week_ranges
 
 # [NEW] 경량 차트 생성 함수 (집계된 데이터만 사용)
 def create_bar_chart_from_aggregated(daily_counts, week_ranges):
@@ -630,7 +614,7 @@ def create_pie_chart(data_dict, title, color_sequence):
 
 # [NEW] Fragment를 사용한 차트 렌더링 - 부분 재실행으로 속도 향상
 @st.fragment
-def render_charts(data_id, selected_keyword, plot_df):
+def render_charts(data_id, selected_keyword, plot_df, start_date, end_date):
     """
     차트만 재실행하는 프래그먼트 (전체 페이지 재실행 방지)
     키워드/차트 타입 변경 시에도 이 부분만 재실행 → 초고속
@@ -652,7 +636,7 @@ def render_charts(data_id, selected_keyword, plot_df):
         with PerfTimer(f"차트 렌더링 ({chart_type})"):
             if chart_type == "막대형":
                 # 집계 데이터 가져오기 (캐싱됨)
-                daily_counts, week_ranges = get_weekly_aggregated(data_id, selected_keyword)
+                daily_counts, week_ranges = get_weekly_aggregated(data_id, selected_keyword, start_date, end_date)
                 
                 if not daily_counts.empty:
                     fig1 = create_bar_chart_from_aggregated(daily_counts, week_ranges)
@@ -664,7 +648,7 @@ def render_charts(data_id, selected_keyword, plot_df):
                     st.info("시각화할 데이터가 없습니다.")
             else:
                 # 선형 차트
-                daily_agg = get_daily_aggregated(data_id, selected_keyword)
+                daily_agg = get_daily_aggregated(data_id, selected_keyword, start_date, end_date)
                 
                 if not daily_agg.empty:
                     fig_line = create_line_chart_from_aggregated(daily_agg)
@@ -749,18 +733,26 @@ if df_full is not None and not df_full.empty:
     if isinstance(selected_dates, tuple) and len(selected_dates) == 2:
         start_date, end_date = selected_dates
         
-        # [SERVER-SIDE AGGREGATION] 474만 건 전수 분석 데이터 로드
+        # [SERVER-SIDE HYBRID] 474만 건 전수 분석 & 쾌속 로딩
         if 'cached_date_range' not in st.session_state or \
            st.session_state['cached_date_range'] != (start_date, end_date):
             
-            with st.spinner("4,746,464건 전수 분석 데이터를 가져오는 중..."):
-                filtered_df = data_loader.load_data_range(start_date, end_date, cache_bust=4)
+            with st.spinner("4,746,464건 전수 트렌드 분석 중..."):
+                # 1. 전체 전수 일자별 트렌드 (브라우저 부하 0%)
+                full_daily_trend = data_loader.get_server_daily_metrics(start_date, end_date)
+                
+                # 2. 랭킹 분석용 요약 데이터 로드 (상위 10만 행만 가져와서 속도 확보)
+                # 이 데이터는 리스트/랭킹용으로만 사용되며, 차트는 위 full_daily_trend를 씁니다.
+                filtered_df = data_loader.load_data_range(start_date, end_date)
+                
+                st.session_state['cached_full_daily_trend'] = full_daily_trend
                 st.session_state['cached_base_df'] = filtered_df
                 st.session_state['cached_date_range'] = (start_date, end_date)
         else:
-            filtered_df = st.session_state['cached_base_df']
-            
-        trend_df = filtered_df
+            full_daily_trend = st.session_state.get('cached_full_daily_trend', pd.DataFrame())
+            filtered_df = st.session_state.get('cached_base_df', pd.DataFrame())
+        
+        trend_df = full_daily_trend
     else:
         st.sidebar.warning("종료일을 선택해주세요.")
         filtered_df = pd.DataFrame()
@@ -895,8 +887,8 @@ if df_full is not None and not df_full.empty:
             if 'cached_keyword_list' not in st.session_state or \
                st.session_state.get('cached_keyword_list_key') != filter_cache_key:
                 t1 = time.time()
-                # 현재 기간의 상위 100개 키워드만 사용
-                top_keywords = trend_df['search_keyword'].value_counts().head(100).index.tolist()
+                # 랭킹 분석용으로 로드된 filtered_df 사용 (상위 10만 행 기준)
+                top_keywords = filtered_df['search_keyword'].value_counts().head(100).index.tolist()
                 search_options = ["전체"] + top_keywords
                 
                 # 키워드 목록 캐싱
@@ -941,7 +933,7 @@ if df_full is not None and not df_full.empty:
                 
                 # [NEW] Fragment를 사용한 부분 재실행 최적화
                 t3 = time.time()
-                render_charts(data_id, selected_keyword, plot_df)
+                render_charts(data_id, selected_keyword, plot_df, start_date, end_date)
                 perf_logger.log_step("차트 렌더링 (전체)", time.time() - t3)
                 
                 # 로깅 종료 (터미널에만 출력)

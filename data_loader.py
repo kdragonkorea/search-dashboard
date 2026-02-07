@@ -26,84 +26,88 @@ def get_raw_data_count(start_date=None, end_date=None, paths=None):
     """[USER FIXED] 원본 CSV 행수를 정확히 반영"""
     return 4746464
 
+@st.cache_data(ttl=3600)
+def get_server_daily_metrics(start_date, end_date):
+    """[ULTRA-FAST] 474만 건 전수 일자별 집계 결과만 가져옵니다."""
+    supabase = get_supabase_client()
+    try:
+        def to_int(dt):
+            if hasattr(dt, 'strftime'): return int(dt.strftime('%Y%m%d'))
+            return int(dt)
+        
+        res = supabase.rpc('get_daily_metrics_v2', {
+            'p_start_date': to_int(start_date),
+            'p_end_date': to_int(end_date)
+        }).execute()
+        
+        df = pd.DataFrame(res.data)
+        if not df.empty:
+            df['search_date'] = pd.to_datetime(df['logday'].astype(str), format='%Y%m%d')
+            # app.py와 전주 대비 로직 호환성을 위해 컬럼명 유지
+            df.columns = ['logday', 'logweek', 'Count', 'Searches', 'Date']
+            return df
+    except Exception as e:
+        st.error(f"서버 집계 오류: {e}")
+    return pd.DataFrame()
+
+@st.cache_data(ttl=3600)
+def get_keyword_trend_server(keyword, start_date, end_date):
+    """[ULTRA-FAST] 특정 키워드에 대한 474만 건 전수 분석 결과만 콕 집어 가져옵니다."""
+    supabase = get_supabase_client()
+    try:
+        def to_int(dt):
+            if hasattr(dt, 'strftime'): return int(dt.strftime('%Y%m%d'))
+            return int(dt)
+
+        res = supabase.rpc('get_keyword_analysis', {
+            'p_keyword': keyword,
+            'p_start_date': to_int(start_date),
+            'p_end_date': to_int(end_date)
+        }).execute()
+        
+        df = pd.DataFrame(res.data)
+        if not df.empty:
+            df['search_date'] = pd.to_datetime(df['logday'].astype(str), format='%Y%m%d')
+            df.columns = ['Date', 'Count', 'Searches', 'search_date']
+            return df
+    except:
+        return pd.DataFrame()
+
 @st.cache_data(ttl=3600, show_spinner=False)
-def load_data_range(start_date=None, end_date=None, cache_bust=4):
+def load_data_range(start_date=None, end_date=None, cache_bust=None):
     """
-    [ULTIMATE FIX - FULL 911K ROWS]
-    30만 건의 제한을 풀고, DB의 요약 행 전체(91만 행)를 가져옵니다.
+    [BALANCED LOAD] 시각화용 91만 요약 데이터 로드.
+    속도와 메모리를 고려하여 100,000행까지만 로드하여 랭킹 통계용으로 사용합니다.
+    (차트는 별도 RPC로 전수 분석하므로 이 데이터는 표/랭킹용으로만 쓰입니다.)
     """
     supabase = get_supabase_client()
     if not supabase: return pd.DataFrame()
 
     def to_int(dt):
         if hasattr(dt, 'strftime'): return int(dt.strftime('%Y%m%d'))
-        try: return int(dt)
-        except: return dt
+        return int(dt)
 
-    actual_start = pd.to_datetime(start_date) - pd.Timedelta(days=14) if start_date else pd.to_datetime("2025-10-01")
-    db_start = to_int(actual_start)
+    db_start = to_int(start_date) if start_date else 20251001
     db_end = to_int(end_date) if end_date else 20251130
 
-    all_data = []
-    # [중요] Supabase의 기본 제한은 1,000건입니다.
-    batch_size = 1000 
-    offset = 0
+    # 랭킹/표를 위해서는 상위 100,000행만 있어도 충분히 정확함
+    res = supabase.table("daily_keyword_summary").select("*")\
+        .gte("logday", db_start).lte("logday", db_end)\
+        .order("sessions", descending=True)\
+        .limit(100000).execute()
     
-    progress_bar = st.sidebar.progress(0)
-    status_text = st.sidebar.empty()
-    
-    try:
-        while True:
-            # 1,000건씩 끊어서 전수 로드
-            res = supabase.table("daily_keyword_summary").select("*")\
-                .gte("logday", db_start).lte("logday", db_end)\
-                .order("logday")\
-                .order("sessions")\
-                .range(offset, offset + batch_size - 1).execute()
-            
-            if not res or not res.data:
-                break
-            
-            all_data.extend(res.data)
-            current_len = len(res.data)
-            offset += current_len
-            
-            # 사용자에게 로딩 상태 진행 표시
-            if offset % 5000 == 0:
-                # 90만 행을 목표로 진행률 계산
-                p = min(offset / 911159, 1.0)
-                progress_bar.progress(p)
-                status_text.write(f"📊 전수 로드 진행 중: {offset:,} 행 완료")
-            
-            # 1,000건 미만이면 진짜 데이터가 바닥난 것임
-            if current_len < batch_size:
-                break
-                
-            # 브라우저 메모리 폭발 방지를 위해 최대 100만 행까지만 로드 (필요시 조절)
-            if offset >= 1000000:
-                break
-            
-        df = pd.DataFrame(all_data)
-        progress_bar.empty()
-        status_text.empty()
-    except Exception as e:
-        st.error(f"데이터 로딩 중 치명적 오류: {e}")
-        progress_bar.empty()
-        status_text.empty()
-        return pd.DataFrame()
-
+    df = pd.DataFrame(res.data)
     if not df.empty:
         df['search_date'] = pd.to_datetime(df['logday'].astype(str), format='%Y%m%d')
         df['검색일'] = df['search_date']
         df['logweek'] = df['logweek'].astype(int)
-        df['sessionid'] = pd.to_numeric(df['sessions'], errors='coerce').fillna(0).astype(int)
-        df['total_count'] = pd.to_numeric(df['searches'], errors='coerce').fillna(0).astype(int)
+        df['sessionid'] = df['sessions'].astype(int)
+        df['total_count'] = df['searches'].astype(int)
         df['result_total_count'] = df['is_failed'].apply(lambda x: 0 if x == 1 else 1)
         df['속성'] = df['pathcd']
         df['연령대'] = df['age'].fillna('미분류')
         df['성별'] = df['gender'].fillna('미분류')
         df['search_keyword'] = df['search_keyword'].fillna('')
-        df['login_status'] = '로그인'
         return df
     return pd.DataFrame()
 
