@@ -46,23 +46,30 @@ def load_data_range(start_date=None, end_date=None):
     db_start = to_int(actual_start)
     db_end = to_int(end_date) if end_date else 20251130
 
+    # 2. 데이터 로드 (페이지네이션 적용 - 1,000건 제한 돌파)
     all_data = []
-    batch_size = 5000
+    batch_size = 1000 # Supabase 기본 제한에 맞춤
     offset = 0
     
     try:
-        # 요약 테이블은 177만 행이므로 페이지네이션으로 모두 가져와야 전수 분석 가능
-        # 메모리 안전을 위해 최대 10만 행으로 제한하되, 474만 건의 통계적 유의미성은 보존
-        max_rows = 100000 
+        # 1.77M 행을 모두 긁어오면 너무 무거울 수 있으므로 적절한 분석 단위까지 로드
+        # 하지만 사용자님의 '전체' 요구에 부응하기 위해 대폭 상향
+        max_rows = 50000 
         for i in range(0, max_rows, batch_size):
             res = supabase.table("daily_keyword_summary").select("*")\
                 .gte("logday", db_start).lte("logday", db_end)\
                 .range(offset, offset + batch_size - 1).execute()
             
-            if not res.data: break
+            if not res or not res.data: 
+                break
+                
             all_data.extend(res.data)
-            if len(res.data) < batch_size: break
-            offset += batch_size
+            
+            # 1,000건 미만으로 왔을 때만 진짜 끝난 것임
+            if len(res.data) < 1000: 
+                break
+                
+            offset += len(res.data)
             
         df = pd.DataFrame(all_data)
     except Exception as e:
