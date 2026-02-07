@@ -10,6 +10,7 @@ import glob
 import datetime
 import time
 import logging
+import gc  # 메모리 관리
 
 # [NEW] 터미널 로깅 설정
 logging.basicConfig(
@@ -924,27 +925,35 @@ if df_full is not None and not df_full.empty:
             
             # Keyword Filter (최적화: 메모리 내 빠른 필터링)
             t2 = time.time()
-            if selected_keyword != "전체":
-                plot_df = trend_df[trend_df['search_keyword'] == selected_keyword].copy()
-                if plot_df.empty:
-                    st.warning(f"선택하신 기간 내에 '{selected_keyword}'에 대한 데이터가 없습니다.")
-                    plot_df = pd.DataFrame()  # 빈 DataFrame으로 설정
+            try:
+                if selected_keyword != "전체":
+                    # .copy() 제거 - 메모리 절약
+                    plot_df = trend_df[trend_df['search_keyword'] == selected_keyword]
+                    if plot_df.empty:
+                        st.warning(f"선택하신 기간 내에 '{selected_keyword}'에 대한 데이터가 없습니다.")
+                        plot_df = pd.DataFrame()  # 빈 DataFrame으로 설정
+                    else:
+                        st.success(f"'{selected_keyword}' 분석 결과입니다. ({len(plot_df):,}건)")
                 else:
-                    st.success(f"'{selected_keyword}' 분석 결과입니다. ({len(plot_df):,}건)")
-            else:
-                plot_df = trend_df
-            perf_logger.log_step(f"데이터 필터링 ({selected_keyword})", time.time() - t2)
+                    plot_df = trend_df
+                perf_logger.log_step(f"데이터 필터링 ({selected_keyword})", time.time() - t2)
 
-            # [CRITICAL OPTIMIZATION] 데이터 식별자 생성 (캐싱 키)
-            data_id = f"{st.session_state.get('cached_date_range', '')}_{len(trend_df)}"
-            
-            # [NEW] Fragment를 사용한 부분 재실행 최적화
-            t3 = time.time()
-            render_charts(data_id, selected_keyword, plot_df)
-            perf_logger.log_step("차트 렌더링 (전체)", time.time() - t3)
-            
-            # 로깅 종료 (터미널에만 출력)
-            perf_logger.end_operation()
+                # [CRITICAL OPTIMIZATION] 데이터 식별자 생성 (캐싱 키)
+                data_id = f"{st.session_state.get('cached_date_range', '')}_{len(trend_df)}"
+                
+                # 메모리 정리
+                gc.collect()
+                
+                # [NEW] Fragment를 사용한 부분 재실행 최적화
+                t3 = time.time()
+                render_charts(data_id, selected_keyword, plot_df)
+                perf_logger.log_step("차트 렌더링 (전체)", time.time() - t3)
+                
+                # 로깅 종료 (터미널에만 출력)
+                perf_logger.end_operation()
+            except Exception as e:
+                st.error(f"차트 렌더링 중 오류가 발생했습니다: {str(e)}")
+                gc.collect()
 
         with tab2:
             # st.header("인기 검색어") 제거됨
