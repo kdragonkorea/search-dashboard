@@ -52,10 +52,8 @@ def load_data_range(start_date=None, end_date=None):
     offset = 0
     
     try:
-        # 1.77M 행을 모두 긁어오면 너무 무거울 수 있으므로 적절한 분석 단위까지 로드
-        # 하지만 사용자님의 '전체' 요구에 부응하기 위해 대폭 상향
-        max_rows = 50000 
-        for i in range(0, max_rows, batch_size):
+        # 요약 테이블의 모든 행(전수)을 가져오기 위해 제한을 풀고 끝까지 루프
+        while True:
             res = supabase.table("daily_keyword_summary").select("*")\
                 .gte("logday", db_start).lte("logday", db_end)\
                 .range(offset, offset + batch_size - 1).execute()
@@ -70,6 +68,10 @@ def load_data_range(start_date=None, end_date=None):
                 break
                 
             offset += len(res.data)
+            
+            # 안전을 위한 최대치 (현실적으로 20만 행이면 474만 건의 통계를 담기에 충분함)
+            if offset >= 200000: 
+                break
             
         df = pd.DataFrame(all_data)
     except Exception as e:
