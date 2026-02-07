@@ -76,9 +76,9 @@ def get_keyword_trend_server(keyword, start_date, end_date):
 @st.cache_data(ttl=3600, show_spinner=False)
 def load_data_range(start_date=None, end_date=None, cache_bust=None):
     """
-    [BALANCED LOAD] 시각화용 91만 요약 데이터 로드.
-    속도와 메모리를 고려하여 100,000행까지만 로드하여 랭킹 통계용으로 사용합니다.
-    (차트는 별도 RPC로 전수 분석하므로 이 데이터는 표/랭킹용으로만 쓰입니다.)
+    [PAGINATED LOAD - BYPASSING 1000 ROW LIMIT]
+    Supabase의 기본 1,000건 제한을 우회하여 인기 검색어 분석용 10만 행을 로드합니다.
+    (차트는 별도 RPC로 474만 건 전수 분석을 하므로, 이 데이터는 상위 랭킹용입니다.)
     """
     supabase = get_supabase_client()
     if not supabase: return pd.DataFrame()
@@ -90,13 +90,27 @@ def load_data_range(start_date=None, end_date=None, cache_bust=None):
     db_start = to_int(start_date) if start_date else 20251001
     db_end = to_int(end_date) if end_date else 20251130
 
-    # 랭킹/표를 위해서는 상위 100,000행만 있어도 충분히 정확함
-    res = supabase.table("daily_keyword_summary").select("*")\
-        .gte("logday", db_start).lte("logday", db_end)\
-        .order("sessions", desc=True)\
-        .limit(100000).execute()
+    all_data = []
+    batch_size = 1000
+    offset = 0
+    max_rows = 100000 
     
-    df = pd.DataFrame(res.data)
+    try:
+        while offset < max_rows:
+            res = supabase.table("daily_keyword_summary").select("*")\
+                .gte("logday", db_start).lte("logday", db_end)\
+                .order("sessions", desc=True)\
+                .range(offset, offset + batch_size - 1).execute()
+            
+            if not res or not res.data: break
+            all_data.extend(res.data)
+            if len(res.data) < batch_size: break
+            offset += len(res.data)
+            
+        df = pd.DataFrame(all_data)
+    except:
+        return pd.DataFrame()
+
     if not df.empty:
         df['search_date'] = pd.to_datetime(df['logday'].astype(str), format='%Y%m%d')
         df['검색일'] = df['search_date']
