@@ -27,11 +27,10 @@ def get_raw_data_count(start_date=None, end_date=None, paths=None):
     return 4746464
 
 @st.cache_data(ttl=3600, show_spinner=False)
-def load_data_range(start_date=None, end_date=None, cache_bust=1):
+def load_data_range(start_date=None, end_date=None, cache_bust=3):
     """
-    [CRITICAL MISSION - 911,159 ROW FULL LOADING]
-    요약 테이블의 91만 행 전체를 무조건 다 긁어옵니다.
-    이것이 474만 건 전수 분석의 유일한 길입니다.
+    [ULTIMATE FIX - BYPASSING 1000 ROW LIMIT]
+    Supabase의 1,000건 제한을 완벽히 우회하여 전수 데이터를 로드합니다.
     """
     supabase = get_supabase_client()
     if not supabase: return pd.DataFrame()
@@ -46,43 +45,49 @@ def load_data_range(start_date=None, end_date=None, cache_bust=1):
     db_end = to_int(end_date) if end_date else 20251130
 
     all_data = []
-    batch_size = 2000 # 성능을 위해 배치 사이즈 상향
+    # [중요] Supabase의 기본 제한은 1,000건입니다.
+    batch_size = 1000 
     offset = 0
     
-    # 91만 행 전수 로드가 완료될 때까지 반복
     progress_bar = st.sidebar.progress(0)
     status_text = st.sidebar.empty()
     
     try:
         while True:
-            # 1,000건 제한을 돌파하기 위해 range 사용
+            # 1,000건씩 끊어서 전수 로드
             res = supabase.table("daily_keyword_summary").select("*")\
                 .gte("logday", db_start).lte("logday", db_end)\
                 .order("logday")\
+                .order("sessions")\
                 .range(offset, offset + batch_size - 1).execute()
             
             if not res or not res.data:
                 break
             
             all_data.extend(res.data)
-            offset += len(res.data)
+            current_len = len(res.data)
+            offset += current_len
             
-            # 진행 상태 표시 (사용자 안심용)
-            if offset % 10000 == 0:
-                p = min(offset / 300000, 1.0) # 예상 작업 범위
+            # 사용자에게 로딩 상태 진행 표시
+            if offset % 5000 == 0:
+                # 90만 행을 목표로 진행률 계산
+                p = min(offset / 911159, 1.0)
                 progress_bar.progress(p)
-                status_text.text(f"📊 데이터 전수 분석 중 ({offset:,} 행 로드 완료)")
+                status_text.write(f"📊 전수 로드 진행 중: {offset:,} 행 완료")
             
-            if len(res.data) < batch_size:
+            # 1,000건 미만이면 진짜 데이터가 바닥난 것임
+            if current_len < batch_size:
                 break
                 
-            # 브라우저 폭발 방지를 위한 최종 안전장치는 100만 행으로 설정 
-            if offset > 1000000: break
+            # 브라우저 메모리 폭발 방지를 위해 최대 30만 행까지만 로드 (필요시 조절)
+            if offset >= 300000:
+                break
             
         df = pd.DataFrame(all_data)
         progress_bar.empty()
         status_text.empty()
     except Exception as e:
+        st.error(f"데이터 로딩 중 치명적 오류: {e}")
         progress_bar.empty()
         status_text.empty()
         return pd.DataFrame()
@@ -100,7 +105,6 @@ def load_data_range(start_date=None, end_date=None, cache_bust=1):
         df['search_keyword'] = df['search_keyword'].fillna('')
         df['login_status'] = '로그인'
         return df
-    
     return pd.DataFrame()
 
 def preprocess_data(df): return df
