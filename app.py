@@ -729,18 +729,11 @@ if df_full is not None and not df_full.empty:
     st.sidebar.header("필터 설정")
     
     # [UPDATED] 데이터셋의 실제 날짜 범위 사용
-    if '검색일' in df_full.columns:
-        latest_data_date = df_full['검색일'].max().date()
-        earliest_data_date = df_full['검색일'].min().date()
-    elif 'search_date' in df_full.columns:
-        latest_data_date = df_full['search_date'].max().date()
-        earliest_data_date = df_full['search_date'].min().date()
-    else:
-        # Fallback: 현재 날짜 기준
-        latest_data_date = datetime.date.today()
-        earliest_data_date = latest_data_date - datetime.timedelta(days=56)
+    # [FIXED] 데이터가 존재하는 2025년 10월~11월로 기본 범위 고정
+    earliest_data_date = datetime.date(2025, 10, 1)
+    latest_data_date = datetime.date(2025, 11, 30)
     
-    # 기간 선택 UI 설정 (실제 데이터 범위 사용)
+    # 기간 선택 UI 설정
     actual_min = earliest_data_date
     actual_max = latest_data_date
     
