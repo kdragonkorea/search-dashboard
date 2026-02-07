@@ -93,7 +93,7 @@ def load_data_range(start_date=None, end_date=None, cache_bust=None):
     # 랭킹/표를 위해서는 상위 100,000행만 있어도 충분히 정확함
     res = supabase.table("daily_keyword_summary").select("*")\
         .gte("logday", db_start).lte("logday", db_end)\
-        .order("sessions", descending=True)\
+        .order("sessions", desc=True)\
         .limit(100000).execute()
     
     df = pd.DataFrame(res.data)
