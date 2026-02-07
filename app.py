@@ -1009,6 +1009,13 @@ if df_full is not None and not df_full.empty:
                     def format_rank_change(val):
                         if val == 'NEW':
                             return 'NEW'
+                        # Handle string values (after astype(str) conversion)
+                        if isinstance(val, str):
+                            try:
+                                num_val = float(val)
+                                return f"+{int(num_val):,}" if num_val > 0 else f"{int(num_val):,}"
+                            except ValueError:
+                                return val
                         elif isinstance(val, (int, float)):
                             if val > 0:
                                 return f"+{int(val):,}"
@@ -1178,6 +1185,13 @@ if df_full is not None and not df_full.empty:
                         def format_rank_change(val):
                             if val == 'NEW':
                                 return 'NEW'
+                            # Handle string values (after astype(str) conversion)
+                            if isinstance(val, str):
+                                try:
+                                    num_val = float(val)
+                                    return f"+{int(num_val):,}" if num_val > 0 else f"{int(num_val):,}"
+                                except ValueError:
+                                    return val
                             elif isinstance(val, (int, float)):
                                 if val > 0:
                                     return f"+{int(val):,}"
@@ -1275,6 +1289,13 @@ if df_full is not None and not df_full.empty:
                     
                         def format_rank_change(val):
                             if val == 'NEW': return 'NEW'
+                            # Handle string values (after astype(str) conversion)
+                            if isinstance(val, str):
+                                try:
+                                    num_val = float(val)
+                                    return f"+{int(num_val):,}" if num_val > 0 else f"{int(num_val):,}"
+                                except ValueError:
+                                    return val
                             elif isinstance(val, (int, float)):
                                 if val > 0: return f"+{int(val):,}"
                                 return f"{int(val):,}"
@@ -1337,6 +1358,13 @@ if df_full is not None and not df_full.empty:
                 return f"+{val:,}" if val > 0 else f"{val:,}"
             def format_rank_change(val):
                 if val == 'NEW': return 'NEW'
+                # Handle string values (after astype(str) conversion)
+                if isinstance(val, str):
+                    try:
+                        num_val = float(val)
+                        return f"+{int(num_val):,}" if num_val > 0 else f"{int(num_val):,}"
+                    except ValueError:
+                        return val
                 return f"+{int(val):,}" if isinstance(val, (int, float)) and val > 0 else f"{int(val):,}"
             def format_comma(val):
                 return f"{val:,}"
