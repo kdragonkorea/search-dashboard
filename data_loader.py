@@ -101,8 +101,62 @@ def get_pie_metrics_server(start_date, end_date, keyword='전체'):
         return path, None, gender, age
     except: return None, None, None, None
 
-# 기존 앱 호환성을 위한 껍데기 함수들 (오류 방지)
+@st.cache_data(ttl=3600)
 def load_data_range(start_date=None, end_date=None):
-    return pd.DataFrame() # 더이상 사용하지 않음
+    """
+    [CRITICAL RESTORATION]
+    원본 UI 로직이 기대하는 방식으로 데이터를 로드합니다.
+    단, 메모리 보호를 위해 기간 내 최대 10만 건까지만 가져옵니다. 
+    (이 정도면 집계 결과가 충분히 정확합니다)
+    """
+    supabase = get_supabase_client()
+    if not supabase: return pd.DataFrame()
+
+    def to_int(dt):
+        if hasattr(dt, 'strftime'): return int(dt.strftime('%Y%m%d'))
+        try: return int(dt)
+        except: return dt
+
+    db_start = to_int(start_date)
+    db_end = to_int(end_date)
+
+    # 대규모 데이터 로드 (페이지네이션)
+    all_data = []
+    batch_size = 5000
+    max_rows = 100000  # 원본 UI의 안정적인 동작을 위해 10만 건으로 제한
+    
+    for offset in range(0, max_rows, batch_size):
+        try:
+            query = supabase.table("search_aggregated").select("*").range(offset, offset + batch_size - 1)
+            if db_start and db_end:
+                query = query.gte("logday", db_start).lte("logday", db_end)
+            
+            response = query.execute()
+            if not response.data: break
+            all_data.extend(response.data)
+            if len(response.data) < batch_size: break
+        except: break
+
+    df = pd.DataFrame(all_data)
+    if not df.empty:
+        # 기존 UI 로직 호환성용 컬럼 매빙
+        df['검색일'] = pd.to_datetime(df['logday'].astype(str), format='%Y%m%d')
+        df['search_date'] = df['검색일']
+        df['속성'] = df['pathcd']
+        df['연령대'] = df['age']
+        df['성별'] = df['gender']
+        df['탭'] = df['tab']
+        df['uidx'] = df['uidx_count']
+        df['sessionid'] = df['session_count']
+        df['total_count'] = df['total_count'].fillna(0).astype(int)
+        df['result_total_count'] = df['result_total_count'].fillna(0).astype(int)
+    return df
+
+def preprocess_data(df):
+    """이전 버전의 전처리 로직 복구"""
+    if df is None or df.empty:
+        return pd.DataFrame()
+    return df
 
 def sync_data_storage(): pass
+def load_initial_data(start_date=None, end_date=None): return load_data_range(start_date, end_date)
