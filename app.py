@@ -972,6 +972,8 @@ if df_full is not None and not df_full.empty:
                     display_df['rank'] = display_df['rank'].astype(int)
                     display_df['count'] = display_df['count'].astype(int)
                     display_df['count_change'] = display_df['count_change'].astype(int)
+                    # Convert rank_change to string to handle mixed types (NEW and numbers)
+                    display_df['rank_change'] = display_df['rank_change'].astype(str)
                 
                     display_df.columns = ['순위', '검색어', '검색량', '전주 대비 변화', '순위 변화']
                 
@@ -1152,6 +1154,8 @@ if df_full is not None and not df_full.empty:
                         display['rank'] = display['rank'].astype(int)
                         display['count'] = display['count'].astype(int)
                         display['count_change'] = display['count_change'].astype(int)
+                        # Convert rank_change to string to handle mixed types (NEW and numbers)
+                        display['rank_change'] = display['rank_change'].astype(str)
                     
                         display.columns = ['순위', '검색어', '검색량', '전주 대비 변화', '순위 변화']
                     
@@ -1248,6 +1252,8 @@ if df_full is not None and not df_full.empty:
                         age_display['rank'] = age_display['rank'].astype(int)
                         age_display['count'] = age_display['count'].astype(int)
                         age_display['count_change'] = age_display['count_change'].astype(int)
+                        # Convert rank_change to string to handle mixed types (NEW and numbers)
+                        age_display['rank_change'] = age_display['rank_change'].astype(str)
                     
                         age_display.columns = ['순위', '검색어', '검색량', '전주 대비 변화', '순위 변화']
                     
@@ -1356,6 +1362,8 @@ if df_full is not None and not df_full.empty:
                     display_this['rank'] = display_this['rank'].astype(int)
                     display_this['cnt'] = display_this['cnt'].astype(int)
                     display_this['count_change'] = display_this['count_change'].astype(int)
+                    # Convert rank_change_display to string to handle mixed types (NEW and numbers)
+                    display_this['rank_change_display'] = display_this['rank_change_display'].astype(str)
                 
                     display_this = display_this[['rank', 'search_keyword', 'cnt', 'count_change', 'rank_change_display']]
                     display_this.columns = ['순위', '검색어', '실패 횟수', '전주 대비 변화', '순위 변화']
