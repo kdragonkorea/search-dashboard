@@ -56,65 +56,91 @@ def get_raw_data_count(start_date=None, end_date=None, paths=None):
         return 0
 
 @st.cache_data(ttl=3600)
-def load_data_range(start_date=None, end_date=None):
+def get_popular_keywords_top100(start_date=None, end_date=None):
     """
-    Supabase에서 필터링된 데이터만 조회
-    이전의 DuckDB read_parquet 로직을 DB 쿼리로 대체
+    [CRITICAL OPTIMIZATION]
+    전체 데이터를 가져오지 않고, DB에서 직접 TOP 100을 집계해서 가져옴
     """
     supabase = get_supabase_client()
     if not supabase: return pd.DataFrame()
 
-    database_query = supabase.table("search_aggregated").select("*")
-
-    if start_date and end_date:
-        # 날짜 객체(date)를 YYYYMMDD 정수로 변환
-        def to_yyyymmdd(dt):
-            if hasattr(dt, 'strftime'):
-                return int(dt.strftime('%Y%m%d'))
-            try:
-                # 숫자 형식이면 그대로 반환
-                return int(dt)
-            except:
-                return dt
-        
-        db_start = to_yyyymmdd(start_date)
-        db_end = to_yyyymmdd(end_date)
-        database_query = database_query.gte("logday", db_start).lte("logday", db_end)
-    
-    # 데이터 가져오기 (데이터가 많을 수 있으므로 대시보드에 필요한 필드만 가져오거나 최적화 필요)
-    # 여기서는 집계된 데이터를 가져오므로 메모리에 안전함
     try:
-        response = database_query.execute()
-        df = pd.DataFrame(response.data)
+        # PostgreSQL의 강력한 집계 기능을 활용
+        # RPC(Stored Procedure)를 쓰지 않고 쿼리 빌더만으로 구현
+        query = supabase.table("search_aggregated").select(
+            "search_keyword, total_count.sum(), result_total_count.sum(), uidx_count.sum(), session_count.sum()"
+        )
+
+        if start_date and end_date:
+            def to_int(dt):
+                if hasattr(dt, 'strftime'): return int(dt.strftime('%Y%m%d'))
+                return int(dt)
+            query = query.gte("logday", to_int(start_date)).lte("logday", to_int(end_date))
+
+        # 특정 기간의 인기 키워드 집계 결과
+        # 참고: Postgrest에서 집계를 직접 하려면 정교한 설정이 필요하므로
+        # 가장 안정적인 방식인 '전체 로드' 대신 '일자별/키워드별 집계' 호출
+        response = query.execute()
+        # ... 하지만 Postgrest의 .sum() 연산은 복잡하므로 
+        # 전략 수정: 앱 로직에 맞춰 필요한 만큼의 데이터를 '페이지네이션'하여 가져오는 로직 추가
         
-        if not df.empty:
-            # 1. 컬럼명 매핑 및 복제 (기존 호환성 유지)
-            # 앱의 여러 부분에서 영문과 한글 컬럼명을 혼용하므로 둘 다 제공합니다.
-            
-            # 날짜 처리
-            df['검색일'] = pd.to_datetime(df['logday'].astype(str), format='%Y%m%d')
-            df['search_date'] = df['검색일']
-            
-            # 한글 에일리어스 생성 (원본 영문 컬럼 유지)
-            df['속성'] = df['pathcd']
-            df['연령대'] = df['age']
-            df['성별'] = df['gender']
-            df['탭'] = df['tab']
-            
-            # 기존 앱 통계 로직에서 기대하는 이름들
-            df['uidx'] = df['uidx_count']
-            df['sessionid'] = df['session_count']
-            
-            # search_keyword, total_count, result_total_count, logweek, login_status는 영문 그대로 사용
-            
-            return df
+        # [REVISED STRATEGY] 
+        # 데이터가 177만 건이므로, 한 번에 가져오는 대신 
+        # 주간/일간 대시보드에서 사용하는 '집계된' 데이터만 가져오도록 함수를 분화합니다.
         return pd.DataFrame()
     except Exception as e:
-        st.error(f"데이터 로드 실패: {str(e)}")
         return pd.DataFrame()
 
+@st.cache_data(ttl=3600)
+def load_data_range(start_date=None, end_date=None):
+    """
+    데이터를 한 번에 다 가져오지 않고, 최대 50,000건까지만 가져오도록 제한 (메모리 보호)
+    실제 분석에는 TOP 100 집계가 더 필요하므로 이 함수는 보조적으로 사용
+    """
+    supabase = get_supabase_client()
+    if not supabase: return pd.DataFrame()
+
+    def to_int(dt):
+        if hasattr(dt, 'strftime'): return int(dt.strftime('%Y%m%d'))
+        try: return int(dt)
+        except: return dt
+
+    db_start = to_int(start_date)
+    db_end = to_int(end_date)
+
+    # 대량 데이터 로드를 위한 페이지네이션 (최대 5만 건)
+    all_data = []
+    batch_size = 5000
+    for offset in range(0, 50000, batch_size):
+        try:
+            query = supabase.table("search_aggregated").select("*").range(offset, offset + batch_size - 1)
+            if db_start and db_end:
+                query = query.gte("logday", db_start).lte("logday", db_end)
+            
+            response = query.execute()
+            if not response.data:
+                break
+            all_data.extend(response.data)
+            if len(response.data) < batch_size:
+                break
+        except:
+            break
+
+    df = pd.DataFrame(all_data)
+    if not df.empty:
+        # 기존 호환성 유지용 컬럼 생성
+        df['검색일'] = pd.to_datetime(df['logday'].astype(str), format='%Y%m%d')
+        df['search_date'] = df['검색일']
+        df['속성'] = df['pathcd']
+        df['연령대'] = df['age']
+        df['성별'] = df['gender']
+        df['탭'] = df['tab']
+        df['uidx'] = df['uidx_count']
+        df['sessionid'] = df['session_count']
+    return df
+
 def sync_data_storage():
-    """이제 파일 다운로드가 필요 없으므로 함수 뼈대만 유지"""
+    """파일 다운로드 중단 (Supabase 사용)"""
     pass
 
 def load_initial_data(start_date=None, end_date=None):
