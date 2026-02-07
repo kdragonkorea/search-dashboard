@@ -733,21 +733,25 @@ if df_full is not None and not df_full.empty:
     if isinstance(selected_dates, tuple) and len(selected_dates) == 2:
         start_date, end_date = selected_dates
         
-        # [SERVER-SIDE HYBRID] 474만 건 전수 분석 & 쾌속 로딩
+        # [SERVER-SIDE] 474만 건 전수 분석을 위해 DB가 직접 계산한 요약 결과만 로드
         if 'cached_date_range' not in st.session_state or \
            st.session_state['cached_date_range'] != (start_date, end_date):
             
             with st.spinner("4,746,464건 전수 트렌드 분석 중..."):
-                # 1. 전체 전수 일자별 트렌드 (브라우저 부하 0%)
+                # 1. 일자별 트렌드 (100% 전수 반영)
                 full_daily_trend = data_loader.get_server_daily_metrics(start_date, end_date)
                 
-                # 2. 랭킹 분석용 요약 데이터 로드 (상위 10만 행만 가져와서 속도 확보)
-                # 이 데이터는 리스트/랭킹용으로만 사용되며, 차트는 위 full_daily_trend를 씁니다.
-                filtered_df = data_loader.load_data_range(start_date, end_date)
+                # 2. 랭킹/속성 분석용 (서버 집계 RPC 활용)
+                top_keywords_df = data_loader.get_top_keywords_server(start_date, end_date)
+                attr_metrics_df = data_loader.get_attr_stats_server(start_date, end_date)
                 
                 st.session_state['cached_full_daily_trend'] = full_daily_trend
-                st.session_state['cached_base_df'] = filtered_df
+                st.session_state['cached_top_keywords'] = top_keywords_df
+                st.session_state['cached_attr_metrics'] = attr_metrics_df
                 st.session_state['cached_date_range'] = (start_date, end_date)
+                
+                # [FAST FALLBACK] 랭킹용 filtered_df도 서버 상위 리스트로 대체하여 로딩 100초 제거
+                st.session_state['cached_base_df'] = top_keywords_df # 랭킹용으로 전용
         else:
             full_daily_trend = st.session_state.get('cached_full_daily_trend', pd.DataFrame())
             filtered_df = st.session_state.get('cached_base_df', pd.DataFrame())
