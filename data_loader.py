@@ -28,12 +28,23 @@ def get_supabase_client() -> Client:
         return create_client(url, key)
     return create_client(SUPABASE_URL, SUPABASE_KEY)
 
-def get_raw_data_count():
-    """전체 데이터 행 수 조회 (Supabase)"""
+def get_raw_data_count(start_date=None, end_date=None):
+    """데이터 행 수 조회 (Supabase, 필터 지원)"""
     try:
         supabase = get_supabase_client()
-        result = supabase.table("search_aggregated").select("id", count="exact").limit(1).execute()
-        return result.count if result.count else 0
+        query = supabase.table("search_aggregated").select("id", count="exact")
+        
+        if start_date and end_date:
+            # 날짜 형식 변환 도우미
+            def to_int(dt):
+                if hasattr(dt, 'strftime'): return int(dt.strftime('%Y%m%d'))
+                try: return int(dt)
+                except: return dt
+            
+            query = query.gte("logday", to_int(start_date)).lte("logday", to_int(end_date))
+            
+        result = query.limit(1).execute()
+        return result.count if result.count is not None else 0
     except:
         return 0
 
