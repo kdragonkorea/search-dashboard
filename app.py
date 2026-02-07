@@ -1146,10 +1146,12 @@ if df_full is not None and not df_full.empty:
                 
                     # Filter Trend DF for specific category history
                     # search_type 컬럼이 없으면 전체 데이터 사용
-                    if 'search_type' in trend_df.columns:
-                        type_df = trend_df[trend_df['search_type'] == search_type]
+                    if 'pathcd' in filtered_df.columns:
+                        type_df = filtered_df[filtered_df['pathcd'] == search_type]
+                    elif '속성' in filtered_df.columns:
+                        type_df = filtered_df[filtered_df['속성'] == search_type]
                     else:
-                        type_df = trend_df  # search_type 컬럼이 없으면 전체 데이터 사용
+                        type_df = filtered_df
                 
                     # Calculate Stats
                     stats = visualizations.calculate_popular_keywords_stats(type_df)
@@ -1253,8 +1255,8 @@ if df_full is not None and not df_full.empty:
                         </div>
                     """, unsafe_allow_html=True)
                 
-                    # Filter Trend DF for specific age
-                    age_df = trend_df[trend_df['age'] == age_label]
+                    # Filter Aggregate DF for specific age (using filtered_df which has age info)
+                    age_df = filtered_df[filtered_df['연령대'] == age_label]
                 
                     # Calculate Stats
                     age_stats = visualizations.calculate_popular_keywords_stats(age_df)
@@ -1382,7 +1384,8 @@ if df_full is not None and not df_full.empty:
                     </div>
                 """, unsafe_allow_html=True)
             
-                failed_stats_df = visualizations.calculate_failed_keywords_stats(trend_df)
+                # [SERVER-SIDE FIX] 실패 검색어 통계 계산 시 전수 랭킹 데이터 사용
+                failed_stats_df = visualizations.calculate_failed_keywords_stats(filtered_df)
             
                 if failed_stats_df is not None and not failed_stats_df.empty:
                     # Formatting Table
@@ -1431,7 +1434,7 @@ if df_full is not None and not df_full.empty:
                 st.markdown("<div style='height: 38px;'></div>", unsafe_allow_html=True)
             
                 if failed_stats_df is not None and not failed_stats_df.empty:
-                    # 실패 검색어 필터링된 데이터프레임 가져오기
+                    # [SERVER-SIDE FIX] 실패 검색어 트렌드 필터링 시 전수 트렌드 데이터 사용
                     failed_trend_df = visualizations.get_filtered_failed_keywords_df(trend_df)
                 
                     # Top 1-5 Failed Keywords Chart
