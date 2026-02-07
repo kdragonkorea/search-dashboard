@@ -45,13 +45,14 @@ def load_data_range(start_date=None, end_date=None):
         try: return int(dt)
         except: return dt
 
-    # 1. 전주 대비 비교를 위해 시작일을 일주일 앞당겨서 로드 (중요!)
+    # 1. 전주 대비 비교를 위해 시작일을 항상 일주일 앞당겨서 로드 (중요!)
     if start_date:
-        actual_start = pd.to_datetime(start_date) - pd.Timedelta(days=7)
+        # datetime 형식이면 timedelta 사용, 문자열이면 변환 후 처리
+        actual_start_dt = pd.to_datetime(start_date) - pd.Timedelta(days=14) # 주간 트렌드를 위해 넉넉히 14일
+        db_start = to_int(actual_start_dt)
     else:
-        actual_start = pd.to_datetime("2025-10-01")
+        db_start = 20251001
         
-    db_start = to_int(actual_start)
     db_end = to_int(end_date)
 
     # 2. 요약 테이블에서 전수 데이터로드
