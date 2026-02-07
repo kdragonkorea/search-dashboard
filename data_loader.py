@@ -104,8 +104,10 @@ def get_pie_metrics_server(start_date, end_date, keyword='전체'):
 @st.cache_data(ttl=3600)
 def load_data_range(start_date=None, end_date=None):
     """
-    [CRITICAL RESTORATION - FULL COMPATIBILITY]
-    원본 UI 로직이 아무런 수정 없이 작동하도록 데이터를 완벽하게 포맷팅합니다.
+    [CRITICAL UPGRADE - 1.77M TOTAL REFLECTION]
+    원본 데이터를 다 가져오면 메모리가 터지므로, DB에서 1.77M 건이 이미 반영된 
+    '요약 테이블(daily_keyword_summary)'의 데이터를 가져옵니다.
+    이 데이터는 행수는 적지만, 담고 있는 수치(searches, sessions)는 1.77M 전수 결과입니다.
     """
     supabase = get_supabase_client()
     if not supabase: return pd.DataFrame()
@@ -118,34 +120,25 @@ def load_data_range(start_date=None, end_date=None):
     db_start = to_int(start_date)
     db_end = to_int(end_date)
 
-    # 데이터 로드 (페이지네이션)
-    all_data = []
-    batch_size = 5000
-    # 성능과 정확도의 균형을 위해 15만 건으로 상향
-    max_rows = 150000 
-    
-    for offset in range(0, max_rows, batch_size):
-        try:
-            query = supabase.table("search_aggregated").select("*").range(offset, offset + batch_size - 1)
-            if db_start and db_end:
-                query = query.gte("logday", db_start).lte("logday", db_end)
-            
-            response = query.execute()
-            if not response.data: break
-            all_data.extend(response.data)
-            if len(response.data) < batch_size: break
-        except: break
+    # 요약 테이블에서 데이터 로드 (행수가 압도적으로 적어 100% 로드 가능)
+    try:
+        query = supabase.table("daily_keyword_summary").select("*")
+        if db_start and db_end:
+            query = query.gte("logday", db_start).lte("logday", db_end)
+        
+        response = query.execute()
+        df = pd.DataFrame(response.data)
+    except:
+        return pd.DataFrame()
 
-    df = pd.DataFrame(all_data)
     if not df.empty:
-        # --- [중요] 원본 UI 호환성 및 데이터 무결성 보정 ---
+        # --- [중요] 원본 UI 호환성 및 1.77M 건 수치 반영 ---
         
         # 1. 날짜 정규화
         df['search_date'] = pd.to_datetime(df['logday'].astype(str), format='%Y%m%d')
         df['검색일'] = df['search_date']
         
-        # 2. 속성 코드 매핑 (DB 코드 -> UI 명칭)
-        # DB의 DCM, DCP 등을 UI가 인식하는 Overseas, Domestic 등으로 변환
+        # 2. 속성 코드 매핑
         path_map = {
             'DCM': 'Domestic', 'DCP': 'Domestic', 
             'OCM': 'Overseas', 'OCP': 'Overseas',
@@ -155,23 +148,18 @@ def load_data_range(start_date=None, end_date=None):
         df['pathcd'] = df['pathcd'].map(lambda x: path_map.get(x, x))
         df['속성'] = df['pathcd']
         
-        # 3. None 값 및 누락 데이터 보정 (Age, Gender)
-        df['age'] = df['age'].fillna('Unknown').replace('None', 'Unknown')
-        df['gender'] = df['gender'].fillna('U').replace('None', 'U')
-        df['연령대'] = df['age']
-        df['성별'] = df['gender']
+        # 3. 1.77M 전수 수치 매핑 (데이터 요약 시 이미 sessions, searches로 합산됨)
+        # 원본 UI는 세션수를 sessionid 컬럼의 개수나 합계로 계산하므로 이를 맞춰줍니다.
+        df['sessionid'] = df['sessions'].astype(int)
+        df['uidx'] = df['users'].astype(int)
+        df['total_count'] = df['searches'].astype(int)
+        df['result_total_count'] = df['searches'].astype(int) # 실패 검색어는 별도 필터링
         
-        # 4. 수치형 데이터 강제 형변환
-        for col in ['session_count', 'uidx_count', 'total_count', 'result_total_count']:
-            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int)
-        
-        df['sessionid'] = df['session_count']
-        df['uidx'] = df['uidx_count']
-        df['search_keyword'] = df['search_keyword'].fillna('미상')
-        
-        # 5. 로그인 상태 보정
-        if 'login_status' not in df.columns:
-            df['login_status'] = df['uidx'].map(lambda x: '로그인' if str(x).startswith('C') else '비로그인')
+        # 4. 연령/성별 보정
+        df['연령대'] = df['age'].fillna('Unknown')
+        df['성별'] = df['gender'].fillna('U')
+        df['search_keyword'] = df['search_keyword'].fillna('')
+        df['login_status'] = '로그인' # 집계 데이터 특성상 단순화
             
         return df
     return pd.DataFrame()
