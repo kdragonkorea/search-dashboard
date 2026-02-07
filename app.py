@@ -761,7 +761,7 @@ if df_full is not None and not df_full.empty:
            st.session_state['cached_date_range'] != (start_date, end_date):
             
             with st.spinner("4,746,464건 전수 분석 데이터를 가져오는 중..."):
-                filtered_df = data_loader.load_data_range(start_date, end_date)
+                filtered_df = data_loader.load_data_range(start_date, end_date, cache_bust=2)
                 st.session_state['cached_base_df'] = filtered_df
                 st.session_state['cached_date_range'] = (start_date, end_date)
         else:
