@@ -239,9 +239,9 @@ def load_data(start_date=None, end_date=None, use_aggregation=True):
     
     # 항상 집계 사용 (메모리 안전)
     if start_date is None and end_date is None:
-#        print("Loading aggregated data (full dataset)...", flush=True)
+        pass  # 로그 출력 제거
     else:
-#        print(f"Loading aggregated data (filtered: {start_date} ~ {end_date})...", flush=True)
+        pass  # 로그 출력 제거
     
     sys.stdout.flush()
     
