@@ -752,27 +752,17 @@ if df_full is not None and not df_full.empty:
         help=f"데이터 기간: {actual_min} ~ {actual_max}"
     )
     
-    # Ensure range is selected
-    if isinstance(selected_dates, tuple) and len(selected_dates) == 2:
-        start_date, end_date = selected_dates
-        
-        # [SERVER-SIDE] 474만 건 전수 분석을 위해 DB가 직접 계산한 결과만 로드
+        # [SERVER-SIDE AGGREGATION] 474만 건 전수 분석 데이터 로드
         if 'cached_date_range' not in st.session_state or \
            st.session_state['cached_date_range'] != (start_date, end_date):
             
-            with st.spinner("4,746,464건 전수 분석 중..."):
-                # 일자별 트렌드
-                daily_trend = data_loader.get_server_daily_metrics(start_date, end_date)
-                # 속성별 비중
-                attr_metrics = data_loader.get_server_attr_metrics(start_date, end_date)
-                
-                st.session_state['cached_daily_trend'] = daily_trend
-                st.session_state['cached_attr_metrics'] = attr_metrics
+            with st.spinner("4,746,464건 전수 분석 데이터를 가져오는 중..."):
+                filtered_df = data_loader.load_data_range(start_date, end_date)
+                st.session_state['cached_base_df'] = filtered_df
                 st.session_state['cached_date_range'] = (start_date, end_date)
-        
-        daily_trend = st.session_state.get('cached_daily_trend', pd.DataFrame())
-        attr_metrics = st.session_state.get('cached_attr_metrics', pd.DataFrame())
-        
+        else:
+            filtered_df = st.session_state['cached_base_df']
+            
         trend_df = filtered_df
     else:
         st.sidebar.warning("종료일을 선택해주세요.")
