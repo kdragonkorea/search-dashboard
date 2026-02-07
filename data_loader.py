@@ -46,15 +46,27 @@ def load_data_range(start_date=None, end_date=None):
     supabase = get_supabase_client()
     if not supabase: return pd.DataFrame()
 
-    query = supabase.table("search_aggregated").select("*")
+    database_query = supabase.table("search_aggregated").select("*")
 
     if start_date and end_date:
-        query = query.gte("logday", int(start_date)).lte("logday", int(end_date))
+        # 날짜 객체(date)를 YYYYMMDD 정수로 변환
+        def to_yyyymmdd(dt):
+            if hasattr(dt, 'strftime'):
+                return int(dt.strftime('%Y%m%d'))
+            try:
+                # 숫자 형식이면 그대로 반환
+                return int(dt)
+            except:
+                return dt
+        
+        db_start = to_yyyymmdd(start_date)
+        db_end = to_yyyymmdd(end_date)
+        database_query = database_query.gte("logday", db_start).lte("logday", db_end)
     
     # 데이터 가져오기 (데이터가 많을 수 있으므로 대시보드에 필요한 필드만 가져오거나 최적화 필요)
     # 여기서는 집계된 데이터를 가져오므로 메모리에 안전함
     try:
-        response = query.execute()
+        response = database_query.execute()
         df = pd.DataFrame(response.data)
         
         if not df.empty:
