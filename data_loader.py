@@ -27,10 +27,10 @@ def get_raw_data_count(start_date=None, end_date=None, paths=None):
     return 4746464
 
 @st.cache_data(ttl=3600, show_spinner=False)
-def load_data_range(start_date=None, end_date=None, cache_bust=3):
+def load_data_range(start_date=None, end_date=None, cache_bust=4):
     """
-    [ULTIMATE FIX - BYPASSING 1000 ROW LIMIT]
-    Supabase의 1,000건 제한을 완벽히 우회하여 전수 데이터를 로드합니다.
+    [ULTIMATE FIX - FULL 911K ROWS]
+    30만 건의 제한을 풀고, DB의 요약 행 전체(91만 행)를 가져옵니다.
     """
     supabase = get_supabase_client()
     if not supabase: return pd.DataFrame()
@@ -79,8 +79,8 @@ def load_data_range(start_date=None, end_date=None, cache_bust=3):
             if current_len < batch_size:
                 break
                 
-            # 브라우저 메모리 폭발 방지를 위해 최대 30만 행까지만 로드 (필요시 조절)
-            if offset >= 300000:
+            # 브라우저 메모리 폭발 방지를 위해 최대 100만 행까지만 로드 (필요시 조절)
+            if offset >= 1000000:
                 break
             
         df = pd.DataFrame(all_data)
