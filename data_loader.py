@@ -88,28 +88,25 @@ def load_data_range(start_date=None, end_date=None):
         df = pd.DataFrame(response.data)
         
         if not df.empty:
-            # 컬럼명 매핑 (기존 호환성 유지)
-            column_mapping = {
-                'logday': '검색일',
-                'search_keyword': 'search_keyword',
-                'pathcd': '속성',
-                'age': '연령대',
-                'gender': '성별',
-                'tab': '탭',
-                'logweek': 'logweek',
-                'login_status': 'login_status',
-                'total_count': 'total_count',
-                'result_total_count': 'result_total_count',
-                'uidx_count': 'uidx',
-                'session_count': 'sessionid'
-            }
-            df = df.rename(columns=column_mapping)
+            # 1. 컬럼명 매핑 및 복제 (기존 호환성 유지)
+            # 앱의 여러 부분에서 영문과 한글 컬럼명을 혼용하므로 둘 다 제공합니다.
             
-            # 날짜 정규화: INTEGER(YYYYMMDD) -> DATETIME
-            if '검색일' in df.columns:
-                df['검색일'] = pd.to_datetime(df['검색일'].astype(str), format='%Y%m%d')
-                df['search_date'] = df['검색일'] # 호환성용 여분 컬럼
-                
+            # 날짜 처리
+            df['검색일'] = pd.to_datetime(df['logday'].astype(str), format='%Y%m%d')
+            df['search_date'] = df['검색일']
+            
+            # 한글 에일리어스 생성 (원본 영문 컬럼 유지)
+            df['속성'] = df['pathcd']
+            df['연령대'] = df['age']
+            df['성별'] = df['gender']
+            df['탭'] = df['tab']
+            
+            # 기존 앱 통계 로직에서 기대하는 이름들
+            df['uidx'] = df['uidx_count']
+            df['sessionid'] = df['session_count']
+            
+            # search_keyword, total_count, result_total_count, logweek, login_status는 영문 그대로 사용
+            
             return df
         return pd.DataFrame()
     except Exception as e:
