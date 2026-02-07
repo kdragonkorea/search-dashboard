@@ -26,18 +26,21 @@ def get_raw_data_count(start_date=None, end_date=None, paths=None):
     """[USER FIXED] 원본 CSV 행수를 정확히 반영"""
     return 4746464
 
+def _to_int_date(dt):
+    """날짜 객체를 YYYYMMDD 정수로 안전하게 변환"""
+    if dt is None: return None
+    if hasattr(dt, 'strftime'): return int(dt.strftime('%Y%m%d'))
+    try: return int(str(dt).replace('-', ''))
+    except: return dt
+
 @st.cache_data(ttl=3600)
 def get_server_daily_metrics(start_date, end_date):
     """[ULTRA-FAST] 474만 건 전수 일자별 집계 결과만 가져옵니다."""
     supabase = get_supabase_client()
     try:
-        def to_int(dt):
-            if hasattr(dt, 'strftime'): return int(dt.strftime('%Y%m%d'))
-            return int(dt)
-        
         res = supabase.rpc('get_daily_metrics_v2', {
-            'p_start_date': to_int(start_date),
-            'p_end_date': to_int(end_date)
+            'p_start_date': _to_int_date(start_date),
+            'p_end_date': _to_int_date(end_date)
         }).execute()
         
         df = pd.DataFrame(res.data)
@@ -55,14 +58,10 @@ def get_keyword_trend_server(keyword, start_date, end_date):
     """[ULTRA-FAST] 특정 키워드에 대한 474만 건 전수 분석 결과만 콕 집어 가져옵니다."""
     supabase = get_supabase_client()
     try:
-        def to_int(dt):
-            if hasattr(dt, 'strftime'): return int(dt.strftime('%Y%m%d'))
-            return int(dt)
-
         res = supabase.rpc('get_keyword_analysis', {
             'p_keyword': keyword,
-            'p_start_date': to_int(start_date),
-            'p_end_date': to_int(end_date)
+            'p_start_date': _to_int_date(start_date),
+            'p_end_date': _to_int_date(end_date)
         }).execute()
         
         df = pd.DataFrame(res.data)
@@ -78,17 +77,12 @@ def load_data_range(start_date=None, end_date=None, cache_bust=None):
     """
     [PAGINATED LOAD - BYPASSING 1000 ROW LIMIT]
     Supabase의 기본 1,000건 제한을 우회하여 인기 검색어 분석용 10만 행을 로드합니다.
-    (차트는 별도 RPC로 474만 건 전수 분석을 하므로, 이 데이터는 상위 랭킹용입니다.)
     """
     supabase = get_supabase_client()
     if not supabase: return pd.DataFrame()
 
-    def to_int(dt):
-        if hasattr(dt, 'strftime'): return int(dt.strftime('%Y%m%d'))
-        return int(dt)
-
-    db_start = to_int(start_date) if start_date else 20251001
-    db_end = to_int(end_date) if end_date else 20251130
+    db_start = _to_int_date(start_date) if start_date else 20251001
+    db_end = _to_int_date(end_date) if end_date else 20251130
 
     all_data = []
     batch_size = 1000
