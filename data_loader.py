@@ -52,10 +52,12 @@ def load_data_range(start_date=None, end_date=None):
     offset = 0
     
     try:
-        # 요약 테이블의 모든 행(전수)을 가져오기 위해 제한을 풀고 끝까지 루프
+        # 요약 테이블의 모든 행(전수)을 가져오기 위한 무제한 루프
         while True:
+            # 1. 명시적으로 정렬하여 페이지네이션 안정성 확보 (logday, pathcd 등)
             res = supabase.table("daily_keyword_summary").select("*")\
                 .gte("logday", db_start).lte("logday", db_end)\
+                .order("logday")\
                 .range(offset, offset + batch_size - 1).execute()
             
             if not res or not res.data: 
@@ -63,14 +65,14 @@ def load_data_range(start_date=None, end_date=None):
                 
             all_data.extend(res.data)
             
-            # 1,000건 미만으로 왔을 때만 진짜 끝난 것임
+            # 1,000건 미만이면 진짜로 더 이상 데이터가 없는 것임
             if len(res.data) < 1000: 
                 break
                 
             offset += len(res.data)
             
-            # 안전을 위한 최대치 (현실적으로 20만 행이면 474만 건의 통계를 담기에 충분함)
-            if offset >= 200000: 
+            # 브라우저 메모리 한계(약 50만 행)까지만 허용하여 전수 커버
+            if offset > 500000: 
                 break
             
         df = pd.DataFrame(all_data)
