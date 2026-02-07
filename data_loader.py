@@ -3,8 +3,14 @@ import pandas as pd
 import os
 import glob
 import duckdb
+import logging
 from pathlib import Path
 from huggingface_hub import hf_hub_download
+
+# Hugging Face 및 httpx 로그 숨기기
+logging.getLogger("huggingface_hub").setLevel(logging.ERROR)
+logging.getLogger("httpx").setLevel(logging.ERROR)
+logging.getLogger("httpcore").setLevel(logging.ERROR)
 
 # Data storage directory
 DATA_STORAGE_DIR = "data_storage"
@@ -29,23 +35,14 @@ def get_parquet_file_path():
         filename = 'data_20261001_20261130.parquet'
         token = None
     
-    print(f"Downloading from Hugging Face Hub...", flush=True)
-    sys.stdout.flush()
-    print(f"  Repository: {repo_id}", flush=True)
-    sys.stdout.flush()
-    print(f"  Filename: {filename}", flush=True)
-    sys.stdout.flush()
     
-    # Hugging Face Hub에서 파일 다운로드 (캐시됨)
+    # Hugging Face Hub에서 파일 다운로드 (캐시됨) - 로그 출력 제거
     file_path = hf_hub_download(
         repo_id=repo_id,
         filename=filename,
         repo_type="dataset",
         token=token
     )
-    
-    print(f"✓ Downloaded to: {file_path}", flush=True)
-    sys.stdout.flush()
     
     return file_path
 
@@ -98,8 +95,8 @@ def get_raw_data_count(start_date=None, end_date=None, path_filter=None):
         
     except Exception as e:
         import traceback
-        print(f"✗ Error getting raw data count: {e}", flush=True)
-        traceback.print_exc()
+#        print(f"✗ Error getting raw data count: {e}", flush=True)
+        # traceback.print_exc()  # 로그 출력 제거
         return 0
 
 @st.cache_data(ttl=3600)
@@ -121,7 +118,7 @@ def query_data_with_duckdb(start_date=None, end_date=None, use_aggregation=False
         # Parquet 파일 경로 가져오기
         file_path = get_parquet_file_path()
         
-        print(f"Querying data with DuckDB (memory-efficient)...", flush=True)
+#        print(f"Querying data with DuckDB (memory-efficient)...", flush=True)
         sys.stdout.flush()
         
         # DuckDB 연결
@@ -178,7 +175,7 @@ def query_data_with_duckdb(start_date=None, end_date=None, use_aggregation=False
             {where_clause}
             """
         
-        print(f"Executing query...", flush=True)
+#        print(f"Executing query...", flush=True)
         sys.stdout.flush()
         
         # 쿼리 실행
@@ -200,7 +197,7 @@ def query_data_with_duckdb(start_date=None, end_date=None, use_aggregation=False
         # 존재하는 컬럼만 변환
         df = df.rename(columns={k: v for k, v in column_mapping.items() if k in df.columns})
         
-        print(f"✓ Query completed: {len(df):,} rows, {len(df.columns)} columns", flush=True)
+#        print(f"✓ Query completed: {len(df):,} rows, {len(df.columns)} columns", flush=True)
         sys.stdout.flush()
         
         return df
@@ -208,9 +205,9 @@ def query_data_with_duckdb(start_date=None, end_date=None, use_aggregation=False
     except Exception as e:
         import traceback
         error_msg = f"✗ Error querying data: {e}"
-        print(error_msg, flush=True)
+#        print(error_msg, flush=True)
         sys.stdout.flush()
-        traceback.print_exc()
+        # traceback.print_exc()  # 로그 출력 제거
         sys.stdout.flush()
         st.error(f"데이터 쿼리 실패: {str(e)}")
         raise e
@@ -221,7 +218,7 @@ def sync_data_storage():
     메모리 절약을 위해 Hugging Face에서 직접 로드
     """
     import sys
-    print(f"Skipping local cache on Streamlit Cloud (memory optimization)", flush=True)
+#    print(f"Skipping local cache on Streamlit Cloud (memory optimization)", flush=True)
     sys.stdout.flush()
     # 아무 작업도 하지 않음 - load_data()에서 직접 HF에서 로드
 
@@ -242,16 +239,16 @@ def load_data(start_date=None, end_date=None, use_aggregation=True):
     
     # 항상 집계 사용 (메모리 안전)
     if start_date is None and end_date is None:
-        print("Loading aggregated data (full dataset)...", flush=True)
+#        print("Loading aggregated data (full dataset)...", flush=True)
     else:
-        print(f"Loading aggregated data (filtered: {start_date} ~ {end_date})...", flush=True)
+#        print(f"Loading aggregated data (filtered: {start_date} ~ {end_date})...", flush=True)
     
     sys.stdout.flush()
     
     # DuckDB로 집계된 데이터만 쿼리
     df = query_data_with_duckdb(start_date, end_date, use_aggregation=True)
     
-    print(f"✓ Data loaded successfully: {len(df):,} rows", flush=True)
+#    print(f"✓ Data loaded successfully: {len(df):,} rows", flush=True)
     sys.stdout.flush()
     
     return df
@@ -306,7 +303,7 @@ def load_data(start_date=None, end_date=None, use_aggregation=True):
     if 'logweek' not in df.columns and 'search_date' in df.columns:
         df['logweek'] = df['search_date'].dt.isocalendar().week
     
-    print(f"✓ Data ready: {len(df):,} rows, {len(df.columns)} columns")
+#    print(f"✓ Data ready: {len(df):,} rows, {len(df.columns)} columns")
     
     return df
 
@@ -324,7 +321,7 @@ def preprocess_data(df):
         return df
     
     import sys
-    print(f"Preprocessing {len(df):,} rows...", flush=True)
+#    print(f"Preprocessing {len(df):,} rows...", flush=True)
     sys.stdout.flush()
     
     # 날짜 컬럼 타입 변환 (YYYYMMDD → datetime)
@@ -338,7 +335,7 @@ def preprocess_data(df):
     # 검색순위 생성 (50만 행 이하일 때만 계산 - 메모리 절약)
     if '검색순위' not in df.columns or df['검색순위'].isna().all():
         if '검색량' in df.columns and '검색일' in df.columns and len(df) < 500000:
-            print(f"Calculating rankings...", flush=True)
+#            print(f"Calculating rankings...", flush=True)
             sys.stdout.flush()
             df['검색순위'] = df.groupby('검색일')['검색량'].rank(ascending=False, method='dense')
         else:
@@ -369,7 +366,7 @@ def preprocess_data(df):
     if 'sessionid' not in df.columns:
         df['sessionid'] = range(len(df))
     
-    print(f"✓ Preprocessing complete: {len(df):,} rows", flush=True)
+#    print(f"✓ Preprocessing complete: {len(df):,} rows", flush=True)
     sys.stdout.flush()
     
     return df

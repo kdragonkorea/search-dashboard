@@ -266,7 +266,7 @@ try:
     data_loader.sync_data_storage()
 except Exception as e:
     st.error(f"데이터 초기화 실패: {str(e)}")
-    st.error("Hugging Face 데이터셋 설정을 확인해주세요.")
+    st.error("데이터셋 설정을 확인해주세요.")
     st.stop()
 
 @st.cache_data(ttl=3600, show_spinner=False)
@@ -713,8 +713,8 @@ if data_exists:
     with st.spinner("데이터를 메모리에 로드하고 있습니다... (예상 시간: 2-3초)"):
         df_full = get_initial_df()
 else:
-    # Hugging Face에서 다운로드하면 느림 (10-15초)
-    with st.spinner("Hugging Face에서 데이터를 다운로드하고 있습니다... (예상 시간: 10-15초)"):
+    # 데이터 다운로드 중 (소스 정보 숨김)
+    with st.spinner("데이터를 불러오는 중입니다... (최초 접속 시 10-15초 소요)"):
         df_full = get_initial_df()
 
 if df_full is not None and not df_full.empty:
