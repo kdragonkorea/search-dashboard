@@ -752,6 +752,10 @@ if df_full is not None and not df_full.empty:
         help=f"데이터 기간: {actual_min} ~ {actual_max}"
     )
     
+    # Ensure range is selected
+    if isinstance(selected_dates, tuple) and len(selected_dates) == 2:
+        start_date, end_date = selected_dates
+        
         # [SERVER-SIDE AGGREGATION] 474만 건 전수 분석 데이터 로드
         if 'cached_date_range' not in st.session_state or \
            st.session_state['cached_date_range'] != (start_date, end_date):
