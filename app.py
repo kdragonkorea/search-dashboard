@@ -271,12 +271,6 @@ except Exception as e:
     st.error(f"데이터베이스 연결 실패: {str(e)}")
     st.stop()
 
-@st.cache_data(ttl=3600, show_spinner=False)
-def get_initial_df():
-    # 실제 데이터 로드 및 전처리만 캐싱
-    raw = data_loader.load_data_range()
-    return data_loader.preprocess_data(raw)
-
 # [NEW] 집계 데이터 캐싱 - 핵심 성능 개선
 @st.cache_data(ttl=3600)
 def get_daily_aggregated(data_id, keyword, start_date, end_date):
@@ -701,62 +695,58 @@ def render_charts(data_id, selected_keyword, plot_df, start_date, end_date):
             )
             if fig_age: st.plotly_chart(fig_age, width="stretch")
 
-# Base DataFrame for initial scale
-# 커스텀 스피너로 로딩 시간 표시
-import os
-# [UPDATED] Supabase 데이터 로딩
-with st.spinner("데이터베이스에서 최신 분석 지표를 가져오는 중..."):
-    df_full = get_initial_df()
+# [REFACTORED] 데이터베이스 연결 확인 및 필터 설정
+try:
+    supabase_client = data_loader.get_supabase_client()
+    connection_status = True
+except Exception as e:
+    st.error(f"서버 연결 실패: {e}")
+    connection_status = False
 
-if df_full is not None and not df_full.empty:
+if connection_status:
     # Sidebar Filters
     st.sidebar.header("필터 설정")
     
-    # [UPDATED] 데이터셋의 실제 날짜 범위 사용
-    # [FIXED] 데이터가 존재하는 2025년 10월~11월로 기본 범위 고정
+    # [FIXED] 데이터가 존재하는 2025년 10월~11월로 기간 고정
     earliest_data_date = datetime.date(2025, 10, 1)
     latest_data_date = datetime.date(2025, 11, 30)
     
-    # 기간 선택 UI 설정
-    actual_min = earliest_data_date
-    actual_max = latest_data_date
-    
     selected_dates = st.sidebar.date_input(
         f"분석 기간 선택",
-        value=(actual_min, actual_max),
-        min_value=actual_min,
-        max_value=actual_max,
-        help=f"데이터 기간: {actual_min} ~ {actual_max}"
+        value=(earliest_data_date, latest_data_date),
+        min_value=earliest_data_date,
+        max_value=latest_data_date,
+        help=f"데이터 기간: {earliest_data_date} ~ {latest_data_date}"
     )
     
     # Ensure range is selected
     if isinstance(selected_dates, tuple) and len(selected_dates) == 2:
         start_date, end_date = selected_dates
         
-        # [SERVER-SIDE] 474만 건 전수 분석을 위해 DB가 직접 계산한 요약 결과만 로드
+        # [SERVER-SIDE] 474만 건 전수 분석 및 상위 요약 데이터 로드
         if 'cached_date_range' not in st.session_state or \
            st.session_state['cached_date_range'] != (start_date, end_date):
             
+            # 1단계: 일자별 전수 트렌드 분석 (RPC - 초고속)
             with st.spinner("4,746,464건 전수 트렌드 분석 중..."):
-                # 1. 일자별 트렌드 (100% 전수 반영)
                 full_daily_trend = data_loader.get_server_daily_metrics(start_date, end_date)
-                
-                # 2. 랭킹/속성 분석용 (서버 집계 RPC 활용)
-                top_keywords_df = data_loader.get_top_keywords_server(start_date, end_date)
-                attr_metrics_df = data_loader.get_attr_stats_server(start_date, end_date)
-                
                 st.session_state['cached_full_daily_trend'] = full_daily_trend
-                st.session_state['cached_top_keywords'] = top_keywords_df
-                st.session_state['cached_attr_metrics'] = attr_metrics_df
-                st.session_state['cached_date_range'] = (start_date, end_date)
-                st.session_state['cached_base_df'] = top_keywords_df
+            
+            # 2단계: 랭킹 및 상세 분석 데이터 로드 (고속 요약)
+            with st.spinner("랭킹 및 상세 필터 데이터 구성 중..."):
+                filtered_df = data_loader.load_data_range(start_date, end_date)
+                st.session_state['cached_base_df'] = filtered_df
                 
-                filtered_df = top_keywords_df # [FIXED] filtered_df 정의 추가
+            st.session_state['cached_date_range'] = (start_date, end_date)
         else:
             full_daily_trend = st.session_state.get('cached_full_daily_trend', pd.DataFrame())
             filtered_df = st.session_state.get('cached_base_df', pd.DataFrame())
         
         trend_df = full_daily_trend
+        
+        # [CRITICAL] 시각화 엔진이 기대하는 컬럼이 filtered_df에 없는 경우 복제
+        if not filtered_df.empty and 'search_date' not in filtered_df.columns:
+             filtered_df['search_date'] = pd.to_datetime(filtered_df['logday'].astype(str), format='%Y%m%d')
     else:
         st.sidebar.warning("종료일을 선택해주세요.")
         filtered_df = pd.DataFrame()
@@ -949,9 +939,8 @@ if df_full is not None and not df_full.empty:
         with tab2:
             # st.header("인기 검색어") 제거됨
             
-            # Calculate Stats using trend_df (needed to find 'Previous Week' for rank change)
-            # calculate_popular_keywords_stats automatically picks the latest week in the passed df as 'Current', which matches selected_week
-            stats_df = visualizations.calculate_popular_keywords_stats(trend_df)
+            # [SERVER-SIDE FIX] 인기 검색어 통계 계산 시 속성 정보가 포함된 filtered_df 사용
+            stats_df = visualizations.calculate_popular_keywords_stats(filtered_df)
             
             if stats_df is not None and not stats_df.empty:
                 col1, col2 = st.columns([1, 2])
@@ -1434,8 +1423,17 @@ if df_full is not None and not df_full.empty:
                 st.markdown("<div style='height: 38px;'></div>", unsafe_allow_html=True)
             
                 if failed_stats_df is not None and not failed_stats_df.empty:
-                    # [SERVER-SIDE FIX] 실패 검색어 트렌드 필터링 시 전수 트렌드 데이터 사용
-                    failed_trend_df = visualizations.get_filtered_failed_keywords_df(trend_df)
+                    # [SERVER-SIDE FIX] 실패 검색어 트렌드 필터링 시 전수 트렌드 데이터 (trend_df) 사용
+                    # visualizations.py 내부 필터를 통과하도록 더미 컬럼 주입
+                    plot_trend_df = trend_df.copy()
+                    plot_trend_df['total_count'] = 0
+                    plot_trend_df['result_total_count'] = 0
+                    plot_trend_df['service'] = 'totalsearch'
+                    plot_trend_df['page'] = 1
+                    plot_trend_df['quick_link_yn'] = 'N'
+                    plot_trend_df['search_keyword'] = '전체' # 트렌드용
+                    
+                    failed_trend_df = visualizations.get_filtered_failed_keywords_df(plot_trend_df)
                 
                     # Top 1-5 Failed Keywords Chart
                     top5_failed = failed_stats_df.sort_values('rank').head(5)['search_keyword'].tolist()
@@ -1458,4 +1456,4 @@ if df_full is not None and not df_full.empty:
         st.warning("⚠️ 선택하신 기간에는 데이터가 존재하지 않습니다. 좌측 필터에서 다른 날짜를 선택해 주세요.")
 
 else:
-    st.error("데이터를 불러올 수 없습니다. 데이터 파일을 확인해주세요.")
+    st.error("데이터베이스 서버에 연결할 수 없습니다. 관리자에게 문의하거나 인터넷 연결을 확인해주세요.")
