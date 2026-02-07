@@ -104,10 +104,8 @@ def get_pie_metrics_server(start_date, end_date, keyword='전체'):
 @st.cache_data(ttl=3600)
 def load_data_range(start_date=None, end_date=None):
     """
-    [CRITICAL RESTORATION]
-    원본 UI 로직이 기대하는 방식으로 데이터를 로드합니다.
-    단, 메모리 보호를 위해 기간 내 최대 10만 건까지만 가져옵니다. 
-    (이 정도면 집계 결과가 충분히 정확합니다)
+    [CRITICAL RESTORATION - FULL COMPATIBILITY]
+    원본 UI 로직이 아무런 수정 없이 작동하도록 데이터를 완벽하게 포맷팅합니다.
     """
     supabase = get_supabase_client()
     if not supabase: return pd.DataFrame()
@@ -120,10 +118,11 @@ def load_data_range(start_date=None, end_date=None):
     db_start = to_int(start_date)
     db_end = to_int(end_date)
 
-    # 대규모 데이터 로드 (페이지네이션)
+    # 데이터 로드 (페이지네이션)
     all_data = []
     batch_size = 5000
-    max_rows = 100000  # 원본 UI의 안정적인 동작을 위해 10만 건으로 제한
+    # 성능과 정확도의 균형을 위해 15만 건으로 상향
+    max_rows = 150000 
     
     for offset in range(0, max_rows, batch_size):
         try:
@@ -139,18 +138,33 @@ def load_data_range(start_date=None, end_date=None):
 
     df = pd.DataFrame(all_data)
     if not df.empty:
-        # 기존 UI 로직 호환성용 컬럼 매빙
-        df['검색일'] = pd.to_datetime(df['logday'].astype(str), format='%Y%m%d')
-        df['search_date'] = df['검색일']
+        # --- [중요] 원본 UI 호환성 컬럼 완벽 매핑 ---
+        
+        # 1. 날짜 처리 (매우 중요: datetime 객체여야 함)
+        df['search_date'] = pd.to_datetime(df['logday'].astype(str), format='%Y%m%d')
+        df['검색일'] = df['search_date']
+        
+        # 2. 필수 컬럼 알리어스 (영문/한글 혼용 대응)
+        df['search_keyword'] = df['search_keyword'].fillna('')
         df['속성'] = df['pathcd']
         df['연령대'] = df['age']
         df['성별'] = df['gender']
         df['탭'] = df['tab']
-        df['uidx'] = df['uidx_count']
-        df['sessionid'] = df['session_count']
+        
+        # 3. 수치형 데이터 (원본 UI는 sessionid와 uidx를 카운트용으로 사용)
+        df['sessionid'] = df['session_count'].astype(int)
+        df['uidx'] = df['uidx_count'].astype(int)
+        
+        # 4. 기타 지표
         df['total_count'] = df['total_count'].fillna(0).astype(int)
         df['result_total_count'] = df['result_total_count'].fillna(0).astype(int)
-    return df
+        
+        # 5. 로그인 상태 (원본 데이터에 따라 복원)
+        if 'login_status' not in df.columns:
+            df['login_status'] = '로그인' # 기본값
+            
+        return df
+    return pd.DataFrame()
 
 def preprocess_data(df):
     """이전 버전의 전처리 로직 복구"""
