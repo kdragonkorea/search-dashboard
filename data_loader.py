@@ -138,30 +138,40 @@ def load_data_range(start_date=None, end_date=None):
 
     df = pd.DataFrame(all_data)
     if not df.empty:
-        # --- [중요] 원본 UI 호환성 컬럼 완벽 매핑 ---
+        # --- [중요] 원본 UI 호환성 및 데이터 무결성 보정 ---
         
-        # 1. 날짜 처리 (매우 중요: datetime 객체여야 함)
+        # 1. 날짜 정규화
         df['search_date'] = pd.to_datetime(df['logday'].astype(str), format='%Y%m%d')
         df['검색일'] = df['search_date']
         
-        # 2. 필수 컬럼 알리어스 (영문/한글 혼용 대응)
-        df['search_keyword'] = df['search_keyword'].fillna('')
+        # 2. 속성 코드 매핑 (DB 코드 -> UI 명칭)
+        # DB의 DCM, DCP 등을 UI가 인식하는 Overseas, Domestic 등으로 변환
+        path_map = {
+            'DCM': 'Domestic', 'DCP': 'Domestic', 
+            'OCM': 'Overseas', 'OCP': 'Overseas',
+            'HCM': 'Hotel', 'HCP': 'Hotel',
+            'TCM': 'TourTicket', 'TCP': 'TourTicket'
+        }
+        df['pathcd'] = df['pathcd'].map(lambda x: path_map.get(x, x))
         df['속성'] = df['pathcd']
+        
+        # 3. None 값 및 누락 데이터 보정 (Age, Gender)
+        df['age'] = df['age'].fillna('Unknown').replace('None', 'Unknown')
+        df['gender'] = df['gender'].fillna('U').replace('None', 'U')
         df['연령대'] = df['age']
         df['성별'] = df['gender']
-        df['탭'] = df['tab']
         
-        # 3. 수치형 데이터 (원본 UI는 sessionid와 uidx를 카운트용으로 사용)
-        df['sessionid'] = df['session_count'].astype(int)
-        df['uidx'] = df['uidx_count'].astype(int)
+        # 4. 수치형 데이터 강제 형변환
+        for col in ['session_count', 'uidx_count', 'total_count', 'result_total_count']:
+            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int)
         
-        # 4. 기타 지표
-        df['total_count'] = df['total_count'].fillna(0).astype(int)
-        df['result_total_count'] = df['result_total_count'].fillna(0).astype(int)
+        df['sessionid'] = df['session_count']
+        df['uidx'] = df['uidx_count']
+        df['search_keyword'] = df['search_keyword'].fillna('미상')
         
-        # 5. 로그인 상태 (원본 데이터에 따라 복원)
+        # 5. 로그인 상태 보정
         if 'login_status' not in df.columns:
-            df['login_status'] = '로그인' # 기본값
+            df['login_status'] = df['uidx'].map(lambda x: '로그인' if str(x).startswith('C') else '비로그인')
             
         return df
     return pd.DataFrame()
