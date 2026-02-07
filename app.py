@@ -262,19 +262,21 @@ def load_custom_css():
 
 load_custom_css()
 
-# [중요] 동기화는 캐시 외부에서 매번 실행하여 새 파일을 즉시 감지하도록 합니다.
+load_custom_css()
+
+# [NEW] Supabase 연결 시도 (최초 1회)
 try:
-    data_loader.sync_data_storage()
+    total_records = data_loader.get_raw_data_count()
+    if total_records == 0:
+        st.warning("데이터가 아직 업로드되지 않았거나 연결에 문제가 있습니다.")
 except Exception as e:
-    st.error(f"데이터 초기화 실패: {str(e)}")
-    st.error("데이터셋 설정을 확인해주세요.")
+    st.error(f"데이터베이스 연결 실패: {str(e)}")
     st.stop()
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_initial_df():
-    # 실제 데이터 로드 및 전처리만 캐싱
-    raw = data_loader.load_data_range()
-    return data_loader.preprocess_data(raw)
+    # Supabase에서 이미 집계된 데이터를 가져옴
+    return data_loader.load_data_range()
 
 # [NEW] 집계 데이터 캐싱 - 핵심 성능 개선
 @st.cache_data(ttl=3600)
@@ -705,18 +707,9 @@ def render_charts(data_id, selected_keyword, plot_df):
             if fig_age: st.plotly_chart(fig_age, width="stretch")
 
 # Base DataFrame for initial scale
-# 커스텀 스피너로 로딩 시간 표시
-import os
-data_exists = os.path.exists("data_storage") and len(glob.glob("data_storage/*.parquet")) > 0
-
-if data_exists:
-    # 캐시된 데이터가 있으면 빠름 (2-3초)
-    with st.spinner("데이터를 메모리에 로드하고 있습니다... (예상 시간: 2-3초)"):
-        df_full = get_initial_df()
-else:
-    # 데이터 다운로드 중 (소스 정보 숨김)
-    with st.spinner("데이터를 불러오는 중입니다... (최초 접속 시 10-15초 소요)"):
-        df_full = get_initial_df()
+# [UPDATED] Supabase 데이터 로딩
+with st.spinner("데이터베이스에서 최신 지표를 가져오는 중..."):
+    df_full = get_initial_df()
 
 if df_full is not None and not df_full.empty:
     # Sidebar Filters
