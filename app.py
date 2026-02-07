@@ -556,12 +556,19 @@ def get_pie_aggregated(data_id, keyword):
         path_counts = {}
     
     # 2. 로그인 상태 집계
-    if 'uidx' in df.columns:
+    if 'login_status' in df.columns:
+        # 집계 데이터에 login_status 컬럼이 있는 경우 (새 방식)
+        login_counts = df.groupby('login_status')['sessionid'].sum().to_dict()
+    elif 'uidx' in df.columns:
+        # 이전 방식 (호환성 유지)
         df_temp = df.copy()
         df_temp['status'] = df_temp['uidx'].apply(lambda x: '로그인' if 'C' in str(x) else '비로그인')
         login_counts = df_temp['status'].value_counts().to_dict()
     else:
         login_counts = {}
+
+
+
     
     # 3. 성별 집계
     if 'gender' in df.columns:
@@ -767,7 +774,21 @@ if df_full is not None and not df_full.empty:
         filtered_df = pd.DataFrame()
         trend_df = pd.DataFrame()
 
-    st.sidebar.info(f"선택 기간 데이터: {len(filtered_df):,}건")
+    # 원본 데이터 건수 조회 (날짜 범위 적용)
+    if isinstance(selected_dates, tuple) and len(selected_dates) == 2:
+        start_date_str = start_date.strftime('%Y%m%d')
+        end_date_str = end_date.strftime('%Y%m%d')
+        raw_count = data_loader.get_raw_data_count(start_date_str, end_date_str)
+    else:
+        raw_count = data_loader.get_raw_data_count()
+    
+    # 데이터 건수 표시 (원본 + 집계)
+    st.sidebar.markdown(f"""
+    **📊 데이터 정보**
+    - 원본 데이터: **{raw_count:,}건**
+    - 집계 데이터: **{len(filtered_df):,}건**
+    """)
+
     
     # 접속 경로 필터
     st.sidebar.markdown("---")
@@ -829,8 +850,29 @@ if df_full is not None and not df_full.empty:
                 trend_df = filtered_df
                 logger.info(f"  🟢 접속 경로 필터 캐시 사용 (즉시 반영)")
         
+        # 필터 적용 후 원본 데이터 건수 조회
+        selected_paths = []
+        if filter_app:
+            selected_paths.append('MDA')
+        if filter_mweb:
+            selected_paths.append('DCM')
+        if filter_pc:
+            selected_paths.append('DCP')
+        
+        # 날짜 범위와 경로 필터 모두 적용한 원본 데이터 건수
+        if isinstance(selected_dates, tuple) and len(selected_dates) == 2:
+            start_date_str = start_date.strftime('%Y%m%d')
+            end_date_str = end_date.strftime('%Y%m%d')
+            raw_count_filtered = data_loader.get_raw_data_count(start_date_str, end_date_str, selected_paths if selected_paths else None)
+        else:
+            raw_count_filtered = data_loader.get_raw_data_count(path_filter=selected_paths if selected_paths else None)
+        
         # 필터 적용 후 데이터 건수 업데이트
-        st.sidebar.info(f"필터 적용 후: {len(filtered_df):,}건")
+        st.sidebar.markdown(f"""
+        **🔍 필터 적용 후**
+        - 원본 데이터: **{raw_count_filtered:,}건**
+        - 집계 데이터: **{len(filtered_df):,}건**
+        """)
 
     # Main Dashboard
     if not filtered_df.empty:

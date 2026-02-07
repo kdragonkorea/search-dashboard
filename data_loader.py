@@ -50,6 +50,59 @@ def get_parquet_file_path():
     return file_path
 
 @st.cache_data(ttl=3600)
+def get_raw_data_count(start_date=None, end_date=None, path_filter=None):
+    """
+    원본 Parquet 파일의 행 개수를 조회 (메모리에 로드하지 않고 COUNT만 수행)
+    
+    Args:
+        start_date: 시작 날짜 (YYYYMMDD 형식)
+        end_date: 종료 날짜 (YYYYMMDD 형식)
+        path_filter: 접속 경로 필터 리스트 (예: ['MDA', 'DCM'])
+    
+    Returns:
+        int: 원본 데이터 행 개수
+    """
+    try:
+        # Parquet 파일 경로 가져오기
+        file_path = get_parquet_file_path()
+        
+        # DuckDB 연결
+        conn = duckdb.connect()
+        
+        # 필터링 조건 구성
+        where_conditions = []
+        
+        # 날짜 필터링
+        if start_date and end_date:
+            where_conditions.append(f"logday BETWEEN {start_date} AND {end_date}")
+        
+        # 경로 필터링
+        if path_filter and len(path_filter) > 0:
+            path_list = "', '".join(path_filter)
+            where_conditions.append(f"pathcd IN ('{path_list}')")
+        
+        # WHERE 절 생성
+        where_clause = "WHERE " + " AND ".join(where_conditions) if where_conditions else ""
+        
+        # COUNT 쿼리 (매우 빠름)
+        query = f"""
+        SELECT COUNT(*) as total_count
+        FROM read_parquet('{file_path}')
+        {where_clause}
+        """
+        
+        result = conn.execute(query).fetchone()
+        conn.close()
+        
+        return result[0] if result else 0
+        
+    except Exception as e:
+        import traceback
+        print(f"✗ Error getting raw data count: {e}", flush=True)
+        traceback.print_exc()
+        return 0
+
+@st.cache_data(ttl=3600)
 def query_data_with_duckdb(start_date=None, end_date=None, use_aggregation=False):
     """
     DuckDB로 Parquet 파일을 직접 쿼리 (메모리에 전체 로드하지 않음)
@@ -84,6 +137,7 @@ def query_data_with_duckdb(start_date=None, end_date=None, use_aggregation=False
         if use_aggregation:
             # 집계 쿼리 (메모리 절약) - 일별/키워드별/속성별 집계
             # 원본 파일의 컬럼명 사용 (영문)
+            # 로그인 상태를 CASE 문으로 추가
             query = f"""
             SELECT 
                 logday,
@@ -93,13 +147,17 @@ def query_data_with_duckdb(start_date=None, end_date=None, use_aggregation=False
                 gender,
                 tab,
                 logweek,
+                CASE 
+                    WHEN uidx LIKE 'C%' THEN '로그인'
+                    ELSE '비로그인'
+                END as login_status,
                 SUM(total_count) as total_count,
                 SUM(result_total_count) as result_total_count,
                 COUNT(DISTINCT uidx) as uidx,
                 COUNT(*) as sessionid
             FROM read_parquet('{file_path}')
             {where_clause}
-            GROUP BY logday, search_keyword, pathcd, age, gender, tab, logweek
+            GROUP BY logday, search_keyword, pathcd, age, gender, tab, logweek, login_status
             """
         else:
             # 원본 데이터 쿼리 (사용하지 않음 - 항상 집계 사용)
