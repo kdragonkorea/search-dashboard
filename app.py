@@ -13,7 +13,7 @@ import logging
 
 # [NEW] 터미널 로깅 설정
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.WARNING,  # INFO 로그 숨기기
     format='%(asctime)s | %(levelname)s | %(message)s',
     datefmt='%H:%M:%S'
 )
