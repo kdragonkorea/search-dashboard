@@ -747,9 +747,8 @@ if df_full is not None and not df_full.empty:
         date_range_key = (start_date, end_date)
         if 'cached_date_range' not in st.session_state or \
            st.session_state['cached_date_range'] != date_range_key:
-            # DuckDB를 통해 선택된 범위만 고속 로드
-            raw_filtered = data_loader.load_data_range(start_date, end_date)
-            filtered_df = data_loader.preprocess_data(raw_filtered)
+            # Supabase를 통해 선택된 범위만 고속 로드
+            filtered_df = data_loader.load_data_range(start_date, end_date)
             
             # 원본 데이터를 세션 상태에 저장 (접속 경로 필터링 전)
             st.session_state['cached_base_df'] = filtered_df
