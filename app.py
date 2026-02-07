@@ -99,16 +99,12 @@ st.set_page_config(layout="wide", page_title="SRT Dashboard")
 # Load Custom Font & Layout Settings
 def load_custom_css():
     # Load font and apply only to specific text elements to avoid breaking icons
+    # Font loading is optional - fallback to sans-serif if not available
     st.markdown("""
         <style>
-            @font-face {
-                font-family: 'Journey';
-                src: url('assets/JOURNEYITSELF-REGULAR 3.TTF') format('truetype');
-            }
-            
-            /* Apply font to text elements only */
+            /* Apply font to text elements only - fallback to sans-serif */
             html, body, p, h1, h2, h3, h4, h5, h6, input, select, label, .stMarkdown, .stDataFrame {
-                font-family: 'Journey', sans-serif !important;
+                font-family: 'Journey', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
             }
             
             /* Aggressively maximize width with wider padding but respect sidebar */
